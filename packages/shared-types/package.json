@@ -1,0 +1,11 @@
+{
+  "name": "@relay/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenAPI-generated TS types from the FastAPI backend, consumed by apps/web.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "generate": "echo 'wired up in Phase 1 once there is a real API surface beyond /v1/auth to generate types from'"
+  }
+}

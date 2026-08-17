@@ -1,0 +1,42 @@
+# --- Python / uv ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Node / pnpm / Next.js ---
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Env files ---
+.env
+.env.*
+!.env.example
+
+# --- Claude Code local settings ---
+.claude/settings.local.json
+
+# --- Editors / OS ---
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Alembic (keep migrations, ignore local db) ---
+*.sqlite3

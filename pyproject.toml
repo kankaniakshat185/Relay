@@ -1,0 +1,24 @@
+[tool.uv.workspace]
+members = ["apps/api"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["apps/api/src"]
+# Alembic migration files are generated, not hand-written — hold them to
+# Alembic's own conventions, not the app's lint/format rules.
+extend-exclude = ["apps/api/alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["relay_api"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "apps/api/src"
+files = ["apps/api/src"]

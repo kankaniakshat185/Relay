@@ -1,0 +1,14 @@
+{
+  "name": "relay",
+  "private": true,
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @relay/web dev",
+    "build:web": "pnpm --filter @relay/web build",
+    "lint:web": "pnpm --filter @relay/web lint",
+    "typecheck:web": "pnpm --filter @relay/web typecheck"
+  }
+}
