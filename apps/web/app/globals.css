@@ -1,27 +1,57 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------
+ * Design tokens — editorial system. See docs/decisions/0003 (frontend
+ * visual redesign) for the rationale. Do not scatter arbitrary colors or
+ * spacing values in components — extend this file instead.
+ * ------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  /* Brand — editorial red block system (Dexo-reference layout, red swapped for orange) */
-  --color-brand: #d8311f;
-  --color-brand-dark: #b8280f;
-  --color-brand-foreground: #fff7f5;
+  --relay-red: #e63323;
+  --relay-red-dark: #c22a1c;
+  --relay-black: #111111;
+  --relay-soft-black: #1a1a1a;
+  --relay-off-white: #faf9f6;
+  --relay-white: #ffffff;
+  --relay-muted: #8a8a8a;
+  --relay-border: #d9d7d2;
+
+  --background: var(--relay-off-white);
+  --foreground: var(--relay-black);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-brand: var(--color-brand);
-  --color-brand-dark: var(--color-brand-dark);
-  --color-brand-foreground: var(--color-brand-foreground);
+
+  --color-brand: var(--relay-red);
+  --color-brand-dark: var(--relay-red-dark);
+  --color-ink: var(--relay-black);
+  --color-ink-soft: var(--relay-soft-black);
+  --color-paper: var(--relay-off-white);
+  --color-paper-white: var(--relay-white);
+  --color-muted: var(--relay-muted);
+  --color-line: var(--relay-border);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-fraunces);
+  --font-serif: var(--font-display);
+}
+
+* {
+  border-color: var(--relay-border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Sharp geometry throughout — see the redesign brief §3. Anything that
+ * needs a radius sets it explicitly and deliberately, rather than
+ * inheriting a default. */
+input,
+button,
+a {
+  border-radius: 0;
 }

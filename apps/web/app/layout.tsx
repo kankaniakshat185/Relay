@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist, Geist_Mono } from "next/font/google";
+import { Bodoni_Moda, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,12 +12,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Bold editorial display serif for the wordmark/headlines — see the
-// Dexo-style reference this design follows (red replacing orange).
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+// The one editorial display serif the whole system is built around — see
+// docs/decisions/0003-frontend-visual-redesign.md. Variable weight so
+// oversized headlines (RELAY at 200px+) can carry real bold weight, not
+// just a scaled-up regular cut.
+const displaySerif = Bodoni_Moda({
+  variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["400", "500", "600", "700", "800"],
   style: ["normal", "italic"],
 });
 
@@ -30,9 +32,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${displaySerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-white text-neutral-900">{children}</body>
+      <body className="bg-paper text-ink flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

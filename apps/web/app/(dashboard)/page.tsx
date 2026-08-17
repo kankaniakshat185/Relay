@@ -1,46 +1,73 @@
 "use client";
 
-import Link from "next/link";
-
 import { useCurrentUser } from "@/components/AuthGuard";
+import { DisplayHeading } from "@/components/editorial/DisplayHeading";
+import { EditorialLinkButton } from "@/components/editorial/EditorialButton";
+import { Rule } from "@/components/editorial/Rule";
+import { SectionLabel } from "@/components/editorial/SectionLabel";
 
-const ROADMAP = [
-  { phase: 1, label: "Connections + Context Searcher", status: "live" },
-  { phase: 2, label: "Codebase Archaeology + Who Should I Ask", status: "upcoming" },
-  { phase: 3, label: "Flaky Test Investigator", status: "upcoming" },
-  { phase: 4, label: "Dependency Alert Bot", status: "upcoming" },
-] as const;
+const FEATURES = [
+  {
+    n: "01",
+    title: "Connections + Context Search",
+    status: "live" as const,
+    span: "md:col-span-7",
+  },
+  {
+    n: "02",
+    title: "Codebase Archaeology + Who Should Ask",
+    status: "upcoming" as const,
+    span: "md:col-span-5",
+  },
+  {
+    n: "03",
+    title: "Flaky Test Investigator",
+    status: "upcoming" as const,
+    span: "md:col-span-4",
+  },
+  {
+    n: "04",
+    title: "Dependency Alert Bot",
+    status: "upcoming" as const,
+    span: "md:col-span-8",
+  },
+];
 
 export default function DashboardHome() {
   const user = useCurrentUser();
 
   return (
-    <div className="max-w-3xl">
-      <p className="text-xs tracking-[0.2em] text-neutral-400 uppercase">Signed in</p>
-      <h1 className="font-serif mt-2 text-4xl text-neutral-900">{user.display_name}</h1>
-      <p className="mt-3 max-w-md text-sm leading-relaxed text-neutral-600">
-        Connecting GitHub, Slack, and Jira for data access is a separate step from signing in —
-        head to Connections to get started.
-      </p>
+    <div>
+      <SectionLabel tone="muted">Signed in as {user.display_name}</SectionLabel>
+      <SectionLabel tone="brand" className="mt-6">
+        Relay / Context Engine
+      </SectionLabel>
+      <DisplayHeading size="xl" className="text-ink mt-3 max-w-4xl">
+        Your engineering context, connected.
+      </DisplayHeading>
 
-      <Link
-        href="/connections"
-        className="bg-brand text-brand-foreground mt-6 inline-flex h-11 items-center rounded-md px-5 text-sm font-medium"
-      >
+      <EditorialLinkButton href="/connections" variant="brand" className="mt-8 w-fit">
         Connect your accounts
-      </Link>
+      </EditorialLinkButton>
 
-      <div className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-neutral-200 bg-neutral-200 sm:grid-cols-4">
-        {ROADMAP.map((item) => (
-          <div key={item.phase} className="bg-white p-4">
-            <p className="font-serif text-brand text-2xl">{item.phase}</p>
-            <p className="mt-1 text-xs leading-snug text-neutral-600">{item.label}</p>
+      <Rule className="mt-20" />
+
+      <div className="grid grid-cols-1 gap-x-8 md:grid-cols-12">
+        {FEATURES.map((feature, i) => (
+          <div
+            key={feature.n}
+            className={`border-line border-b py-10 ${feature.span} ${i % 2 === 0 ? "md:border-r md:pr-8" : "md:pl-8"}`}
+          >
+            <p className="font-serif text-brand text-6xl sm:text-7xl">{feature.n}</p>
+            <DisplayHeading as="h2" size="md" className="text-ink mt-4 max-w-sm">
+              {feature.title}
+            </DisplayHeading>
             <p
-              className={`mt-2 text-[11px] font-medium tracking-wide uppercase ${
-                item.status === "live" ? "text-brand" : "text-neutral-300"
+              className={`mt-6 text-xs font-medium tracking-[0.2em] uppercase ${
+                feature.status === "live" ? "text-brand" : "text-muted"
               }`}
             >
-              {item.status}
+              {feature.status}
             </p>
           </div>
         ))}

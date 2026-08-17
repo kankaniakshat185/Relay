@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useCurrentUser } from "./AuthGuard";
+import { LogoMark } from "./editorial/LogoMark";
 import { logout } from "@/lib/auth";
 
 const LIVE_ITEMS = [
@@ -24,20 +25,19 @@ export function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
+    <header className="border-line flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
       <div className="flex items-center gap-8">
-        <Link href="/" className="font-serif text-brand text-xl tracking-tight">
-          Relay
+        <Link href="/" className="flex items-center gap-2">
+          <LogoMark className="h-7 w-7" />
+          <span className="font-serif text-ink text-3xl">Relay</span>
         </Link>
-        <nav className="flex items-center gap-5">
+        <nav className="hidden items-center gap-6 sm:flex">
           {LIVE_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`text-sm font-medium transition-colors ${
-                pathname === item.href
-                  ? "text-neutral-900"
-                  : "text-neutral-500 hover:text-neutral-900"
+              className={`text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
+                pathname === item.href ? "text-brand" : "text-muted hover:text-ink"
               }`}
             >
               {item.label}
@@ -47,7 +47,7 @@ export function DashboardNav() {
             <span
               key={item.label}
               title={`Ships in Phase ${item.phase}`}
-              className="cursor-not-allowed text-sm text-neutral-300"
+              className="text-line cursor-not-allowed text-xs font-medium tracking-[0.15em] uppercase"
             >
               {item.label}
             </span>
@@ -55,14 +55,16 @@ export function DashboardNav() {
         </nav>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-neutral-600">{user.display_name}</span>
+      <div className="flex items-center gap-5">
+        <span className="text-muted hidden text-xs tracking-[0.1em] uppercase sm:inline">
+          {user.display_name}
+        </span>
         <button
           onClick={async () => {
             await logout();
             router.replace("/login");
           }}
-          className="text-sm text-neutral-500 hover:text-neutral-900"
+          className="text-xs font-medium tracking-[0.15em] text-ink uppercase transition-colors hover:text-brand"
         >
           Sign out
         </button>

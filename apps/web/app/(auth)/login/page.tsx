@@ -1,3 +1,7 @@
+import { DisplayHeading } from "@/components/editorial/DisplayHeading";
+import { LogoMark } from "@/components/editorial/LogoMark";
+import { RedPanel } from "@/components/editorial/RedPanel";
+import { SectionLabel } from "@/components/editorial/SectionLabel";
 import { loginUrl } from "@/lib/api";
 
 const PROVIDERS = [
@@ -9,39 +13,51 @@ const PROVIDERS = [
 export default function LoginPage() {
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-3 text-xs tracking-[0.2em] text-neutral-500 uppercase">
-        <span>Relay</span>
-        <span>Sign in</span>
+      <div className="border-line flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
+        <span className="flex items-center gap-2">
+          <LogoMark className="h-7 w-7" />
+          <span className="font-serif text-ink text-3xl">Relay</span>
+        </span>
+        <SectionLabel>Sign in</SectionLabel>
       </div>
 
-      <div className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-10 px-6 py-16 md:grid-cols-[1.3fr_1fr]">
-        <div>
-          <p className="max-w-sm text-sm leading-relaxed text-neutral-600">
+      <div className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-x-10 gap-y-16 px-6 py-16 sm:px-10 md:grid-cols-12 md:items-center md:py-0">
+        <div className="md:col-span-7">
+          <SectionLabel tone="brand">Relay / Context Engine</SectionLabel>
+          <p className="text-muted mt-4 max-w-sm text-sm leading-relaxed">
             A shared context engine across GitHub, Slack, and Jira — one retrieval engine,
             queried three different ways.
           </p>
-          <h1 className="font-serif text-brand mt-4 text-[5rem] leading-[0.85] tracking-tight sm:text-[7.5rem]">
+          <DisplayHeading size="hero" className="text-ink -ml-1 mt-2">
             Relay
-          </h1>
+          </DisplayHeading>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="bg-brand text-brand-foreground rounded-md p-5">
-            <p className="text-sm font-medium leading-relaxed">
-              This only identifies you — connecting GitHub, Slack, and Jira for data access
-              happens separately, once you&apos;re signed in.
+        <div className="flex flex-col gap-3 md:col-span-5">
+          <RedPanel className="p-6">
+            <SectionLabel tone="paper">This only identifies you —</SectionLabel>
+            <p className="mt-3 text-sm leading-relaxed">
+              Connecting GitHub, Slack, and Jira for data access happens separately, once
+              you&apos;re signed in.
             </p>
-          </div>
+          </RedPanel>
 
-          {PROVIDERS.map((provider) => (
-            <a
-              key={provider.id}
-              href={loginUrl(provider.id)}
-              className="flex h-12 items-center justify-center rounded-md border border-neutral-900 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-900 hover:text-white"
-            >
-              Continue with {provider.label}
-            </a>
-          ))}
+          <div className="border-line flex flex-col border">
+            {PROVIDERS.map((provider, i) => (
+              <a
+                key={provider.id}
+                href={loginUrl(provider.id)}
+                className={`group hover:bg-ink hover:text-paper flex h-14 items-center justify-between px-5 text-sm font-medium tracking-wide text-ink transition-colors ${
+                  i !== 0 ? "border-line border-t" : ""
+                }`}
+              >
+                <span>Continue with {provider.label}</span>
+                <span aria-hidden className="transition-transform group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </div>

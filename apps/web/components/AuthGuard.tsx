@@ -45,7 +45,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (user === "loading" || user === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-neutral-500">Checking session…</p>
+        <p className="text-muted text-xs tracking-[0.15em] uppercase">Checking session…</p>
       </div>
     );
   }
