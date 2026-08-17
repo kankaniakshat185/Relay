@@ -14,8 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # Import every model module so it registers on Base.metadata before
 # autogenerate runs. Add new model modules here as they're created.
 from relay_api.auth import models as auth_models  # noqa: E402, F401
+from relay_api.connectors import models as connector_models  # noqa: E402, F401
 from relay_api.core.config import get_settings  # noqa: E402
 from relay_api.core.db import Base  # noqa: E402
+from relay_api.engine.ingestion import models as ingestion_models  # noqa: E402, F401
+
+# Note: autogenerate does NOT add the `import pgvector.sqlalchemy` a new
+# Vector column needs — it renders `pgvector.sqlalchemy.vector.VECTOR(...)`
+# but the import has to be added to the generated file by hand each time.
+# pgvector has no first-party alembic integration; this is a known gap.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

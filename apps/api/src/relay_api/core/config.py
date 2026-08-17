@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     secret_key: str = Field(alias="SECRET_KEY")
     session_cookie_name: str = "relay_session"
     session_token_ttl_seconds: int = 60 * 60 * 24 * 14  # 14 days
+    # Fernet key for connector_credentials at-rest encryption — separate
+    # from secret_key, see connectors/encryption.py. Generate with:
+    # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    connector_encryption_key: str = Field(alias="CONNECTOR_ENCRYPTION_KEY")
 
     # --- Database ---
     database_url: str = Field(alias="DATABASE_URL")
@@ -43,6 +47,21 @@ class Settings(BaseSettings):
 
     google_login_client_id: str = Field(default="", alias="GOOGLE_LOGIN_CLIENT_ID")
     google_login_client_secret: str = Field(default="", alias="GOOGLE_LOGIN_CLIENT_SECRET")
+
+    # --- OAuth: connector providers (broad, data-access scopes) ---
+    github_connector_client_id: str = Field(default="", alias="GITHUB_CONNECTOR_CLIENT_ID")
+    github_connector_client_secret: str = Field(default="", alias="GITHUB_CONNECTOR_CLIENT_SECRET")
+
+    slack_connector_client_id: str = Field(default="", alias="SLACK_CONNECTOR_CLIENT_ID")
+    slack_connector_client_secret: str = Field(default="", alias="SLACK_CONNECTOR_CLIENT_SECRET")
+
+    jira_connector_client_id: str = Field(default="", alias="JIRA_CONNECTOR_CLIENT_ID")
+    jira_connector_client_secret: str = Field(default="", alias="JIRA_CONNECTOR_CLIENT_SECRET")
+
+    # --- OpenAI: embeddings (ADR 0006) + context-search synthesis (ADR 0007) ---
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    embedding_model: str = "text-embedding-3-small"
+    synthesis_model: str = "gpt-4o-mini"
 
     # --- Observability ---
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")

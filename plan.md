@@ -18,6 +18,9 @@
 | Python package manager | uv | Workspace support, single lockfile, fast installs |
 | Database | Neon Postgres (serverless) | |
 | Job queue / scheduling | Redis + Celery | Powers webhook ingestion, polling jobs, background indexing |
+| Vector search | pgvector on Neon Postgres | Not a separate vector DB — see `docs/adr/0006-embedding-and-vector-search.md` |
+| Embeddings | OpenAI `text-embedding-3-small` | See ADR 0006 |
+| Answer synthesis (Context Searcher) | OpenAI chat completion | Same vendor as embeddings, different call — see `docs/adr/0007-synthesis-llm.md` |
 | Auth (login) | OAuth via GitHub / Slack / Google — minimal scopes, session-only | Separate from data-access connectors, see §4 |
 | Auth (data access) | Per-provider OAuth with broader scopes, connected post-login | |
 | Type checking | mypy (strict mode) — backend; TypeScript strict mode — frontend | |
@@ -191,10 +194,9 @@ Every ADR and decision doc follows the same shape:
 
 These are intentionally left open rather than assumed. Flag before starting the relevant phase:
 
-- Embedding model / vector search approach for `engine/indexing` — not yet decided, needs deciding before Phase 1 build starts in earnest.
 - Whether Neon branch-per-PR gets adopted later for integration testing (currently: Dockerized Postgres in CI, per your call) — revisit only if the Docker approach starts causing real friction.
 
-**Resolved since first draft:** license (MIT), repo visibility (public), API versioning (`/v1` prefix from the start), observability (Sentry + structured logging) — see §1 for details.
+**Resolved since first draft:** license (MIT), repo visibility (public), API versioning (`/v1` prefix from the start), observability (Sentry + structured logging), embedding model / vector search (pgvector on Neon + OpenAI `text-embedding-3-small`, ADR 0006), context-search answer synthesis LLM (OpenAI, ADR 0007) — see §1 for details.
 
 ---
 

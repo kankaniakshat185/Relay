@@ -1,0 +1,71 @@
+"""Celery task that runs after a connector is connected (see
+`connectors/router.py`'s callback): fetch → normalize → ingest → index for
+one user's one provider. Each connector's `ingest.fetch_normalized_items`
+already returns the common `NormalizedItem` shape (`engine/ingestion`), so
+this orchestration layer stays provider-agnostic past the initial dispatch.
+"""
+
+import asyncio
+import uuid
+
+from relay_api.connectors import service as connector_service
+from relay_api.connectors.github import ingest as github_ingest
+from relay_api.connectors.jira import ingest as jira_ingest
+from relay_api.connectors.models import ConnectorCredential
+from relay_api.connectors.slack import ingest as slack_ingest
+from relay_api.core.db import async_session_factory
+from relay_api.core.logging import get_logger
+from relay_api.engine.indexing import service as indexing_service
+from relay_api.engine.ingestion import service as ingestion_service
+from relay_api.engine.ingestion.schemas import NormalizedItem
+from relay_api.jobs.celery_app import celery_app
+
+logger = get_logger(__name__)
+
+
+async def _fetch_items(
+    provider: str, access_token: str, credential: ConnectorCredential
+) -> list[NormalizedItem]:
+    if provider == "github":
+        return await github_ingest.fetch_normalized_items(access_token)
+    if provider == "slack":
+        return await slack_ingest.fetch_normalized_items(
+            access_token, credential.external_account_id
+        )
+    if provider == "jira":
+        return await jira_ingest.fetch_normalized_items(
+            access_token, credential.external_account_id, credential.external_account_label
+        )
+    raise ValueError(f"Unknown connector provider: {provider}")
+
+
+async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None:
+    async with async_session_factory() as db:
+        credential = await connector_service.get_credential(db, user_id, provider)
+        if credential is None:
+            logger.warning(
+                "index_job_no_credential", extra={"user_id": str(user_id), "provider": provider}
+            )
+            return
+
+        access_token = connector_service.decrypted_access_token(credential)
+        items = await _fetch_items(provider, access_token, credential)
+
+        await ingestion_service.upsert_items(db, user_id, items)
+        to_index = await ingestion_service.get_items_needing_indexing(db, user_id)
+        await indexing_service.index_items(db, to_index)
+
+        logger.info(
+            "index_job_completed",
+            extra={
+                "user_id": str(user_id),
+                "provider": provider,
+                "ingested": len(items),
+                "indexed": len(to_index),
+            },
+        )
+
+
+@celery_app.task(name="relay_api.jobs.indexing.index_connector_task")
+def index_connector_task(user_id: str, provider: str) -> None:
+    asyncio.run(_run_indexing_for_connector(uuid.UUID(user_id), provider))

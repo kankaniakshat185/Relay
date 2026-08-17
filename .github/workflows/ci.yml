@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16 # not plain postgres:16-alpine — needs the pgvector extension, see ADR 0006
         env:
           POSTGRES_USER: relay
           POSTGRES_PASSWORD: relay
@@ -38,6 +38,8 @@ jobs:
     env:
       ENV: test
       SECRET_KEY: ci-test-secret-key
+      CONNECTOR_ENCRYPTION_KEY: Q63TEcnmpOHp8oADIoiuMlti2Al53hS-FNFt3u7b7Tk=
+      OPENAI_API_KEY: ci-dummy-key-not-called-in-tests
       DATABASE_URL: postgresql+asyncpg://relay:relay@localhost:5432/relay_test
       REDIS_URL: redis://localhost:6379/0
 

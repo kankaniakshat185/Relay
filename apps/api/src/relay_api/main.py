@@ -12,8 +12,10 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from relay_api.auth.router import router as auth_router
+from relay_api.connectors.router import router as connectors_router
 from relay_api.core.config import get_settings
 from relay_api.core.logging import configure_logging, get_logger
+from relay_api.features.context_search.router import router as context_search_router
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -43,7 +45,9 @@ def create_app() -> FastAPI:
 
     v1 = APIRouter(prefix=settings.api_v1_prefix)
     v1.include_router(auth_router)
-    # Phase 1+: v1.include_router(context_search_router), etc. — see plan.md §5.
+    v1.include_router(connectors_router)
+    v1.include_router(context_search_router)
+    # Phase 2+: archaeology, who_to_ask routers — see plan.md §5.
     app.include_router(v1)
 
     @app.get("/healthz", tags=["health"])
