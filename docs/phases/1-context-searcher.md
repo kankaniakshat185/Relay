@@ -123,3 +123,65 @@ the GitHub connector now ingests commit messages alongside PRs, not PRs
 only. Full rationale in ADR 0008; this file's "what shipped"/"what was
 harder than expected" sections above are left as the accurate record of
 this phase's original ship date, not rewritten.
+
+## Addendum: what a real end-to-end run surfaced
+
+Connecting all three providers to real accounts and actually running
+search — not just unit/integration tests against mocks — surfaced several
+bugs no amount of mocked testing would have caught, since each one is
+specifically about behavior at the boundary with a live service or a
+long-running worker process:
+
+- **Celery never ran a single indexing task.** `autodiscover_tasks`'
+  default `related_name="tasks"` silently found nothing, since the task
+  lives in `jobs/indexing.py` — zero error, just an empty task registry.
+  Every connector-connect indexing job had been vanishing into the Redis
+  queue with nothing to consume it since Phase 1 shipped. Fixed with an
+  explicit `related_name`, caught for good with a registration test
+  (`test_celery_app.py`) — this class of bug is exactly what "add a test"
+  means when the failure mode is silence, not an exception.
+- **A worse version of the pytest event-loop bug, in production code.**
+  `core/db.py`'s engine is a correct singleton for FastAPI (one persistent
+  loop for the process's life) but wrong for Celery's prefork workers,
+  which reuse the same child process across many tasks while
+  `index_connector_task` calls `asyncio.run(...)` — a new loop every task.
+  GitHub and Slack indexing (each worker process's first task) worked;
+  Jira's retry, routed to an already-used process, failed with zero rows
+  ever reaching the DB. Fixed with `engine.dispose()` at the top of every
+  task (SQLAlchemy's own documented fix for this exact scenario).
+- **Atlassian retired the Jira search endpoint we built against.**
+  `GET /rest/api/3/search` now returns `410 Gone`; the replacement,
+  `POST /rest/api/3/search/jql`, also rejects an unbounded `ORDER BY`
+  with no restriction clause. Fixed by migrating to the new endpoint with
+  a genuine `updated >= -365d` bound — which also better matches "recent
+  activity" the way GitHub/Slack already scope themselves.
+- **Jira's access token expiry is the "no refresh flow" gap, hit for
+  real.** Flagged as an open item in this retro's first draft; a ~1 hour
+  token expiry during a testing session made it concrete. Still open —
+  reconnecting is the workaround for now.
+- **Gemini's batch embedding endpoint caps at 100 items per call**; a
+  single GitHub indexing pass (10 repos × up to 40 PRs+commits each) can
+  produce ~400. OpenAI's much higher limit is why this never surfaced
+  before adding Gemini as a provider option (ADR 0009). Fixed generically
+  — `embed_texts` chunks into batches of 96 regardless of which provider
+  is active, not a Gemini-specific patch.
+- **A real commit with no line breaks blew past `title`'s column limit.**
+  `message.splitlines()[0]` returns the *entire* message when there's no
+  newline — hit on an actual commit from a real repo, not a crafted edge
+  case. Fixed with a shared `truncate_title` helper applied to every
+  connector's title field, not just GitHub's commits.
+- **One Slack channel the bot wasn't invited to failed the entire indexing
+  run**, losing every channel that *would* have worked. `conversations.list`
+  returns channels the bot can see, not channels it's a member of — only
+  `conversations.history` enforces membership. Fixed by catching a
+  per-channel failure and continuing, logging a warning instead of
+  aborting the whole provider's ingestion.
+- **Embeddings had zero error handling anywhere**, even though every
+  search depends on them unconditionally (raw mode included) — an OpenAI
+  quota error was a raw 500 with a stack trace. Fixed with
+  `EmbeddingUnavailableError` + an app-level exception handler mapping it
+  to a clean `503`.
+
+None of these were architecture mistakes — the design held up. They were
+all "the real world doesn't match the mock" gaps, found because the
+system got run for real before being called done.

@@ -17,7 +17,8 @@ Phase 1 (Context Searcher vertical slice) — see [`plan.md` §5](plan.md#5-phas
 for the phase plan. Login OAuth (GitHub/Slack/Google), connector OAuth
 (GitHub/Slack/Jira, read-only — GitHub covers PRs and commit messages),
 and the correlation engine (ingestion + hybrid keyword/vector indexing,
-ADR 0006) are wired end-to-end. The Context Searcher has two modes:
+ADR 0006, embedding provider swappable to a free Gemini tier, ADR 0009)
+are wired end-to-end. The Context Searcher has two modes:
 raw retrieval (default, no LLM, always free) and an optional AI-summary
 mode across OpenAI/Groq/Anthropic/Gemini — BYOK, or a rate-limited OpenAI
 free tier (ADR 0007, ADR 0008). Archaeology and Who-Should-I-Ask (querying
@@ -46,6 +47,8 @@ cp apps/api/.env.example apps/api/.env
 # Fill in: SECRET_KEY, CONNECTOR_ENCRYPTION_KEY, OPENAI_API_KEY, and the
 # GitHub/Slack/Google login + GitHub/Slack/Jira connector OAuth app
 # credentials — see .env.example for how to generate the two secret keys.
+# No OpenAI billing yet? Set EMBEDDING_PROVIDER=gemini and GEMINI_API_KEY
+# instead — a free AI Studio key works, no credit card needed (ADR 0009).
 
 # NOT plain postgres:16-alpine — needs the pgvector extension (ADR 0006).
 docker run -d --name relay-pg -e POSTGRES_USER=relay -e POSTGRES_PASSWORD=relay \
