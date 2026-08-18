@@ -96,3 +96,25 @@ def test_commit_with_empty_message_gets_a_placeholder_title() -> None:
     item = normalize_commit(commit, repo_full_name="acme/widgets")
 
     assert item.title == "(no commit message)"
+
+
+def test_commit_with_a_long_single_line_message_gets_a_truncated_title() -> None:
+    """Real bug, real commit: a message with no line breaks means
+    `splitlines()[0]` returns the *entire* message — this used to blow
+    past `ingested_items.title`'s column limit outright."""
+    long_message = "feat: " + ("a very long commit message with no newlines at all " * 20)
+    commit = {
+        "sha": "jkl012",
+        "html_url": "https://github.com/acme/widgets/commit/jkl012",
+        "commit": {
+            "message": long_message,
+            "author": {"name": "Octo Cat", "date": "2026-01-01T00:00:00Z"},
+        },
+        "author": {"login": "octocat"},
+    }
+
+    item = normalize_commit(commit, repo_full_name="acme/widgets")
+
+    assert len(item.title) <= 201  # 200 chars + the ellipsis marker
+    assert item.title.startswith("feat:")
+    assert item.body == long_message  # full message preserved in body, only title is capped

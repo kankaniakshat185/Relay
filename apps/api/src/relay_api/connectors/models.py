@@ -10,7 +10,7 @@ an oversight — it's out of scope until a feature actually needs it.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,8 +31,13 @@ class ConnectorCredential(Base):
     provider: Mapped[str] = mapped_column(String(32))  # "github" | "slack" | "jira"
 
     # Fernet-encrypted (connectors/encryption.py) — never stored plaintext.
-    access_token_encrypted: Mapped[str] = mapped_column(String(2048))
-    refresh_token_encrypted: Mapped[str | None] = mapped_column(String(2048), default=None)
+    # Text, not a bounded VARCHAR: GitHub/Slack tokens are short opaque
+    # strings, but Jira's OAuth tokens are long (JWT-style) and, once
+    # Fernet-encrypted (~33% base64 overhead on top), blow well past any
+    # size that looked reasonable for the other two providers. Found by
+    # actually connecting Jira, not by guessing a bigger number up front.
+    access_token_encrypted: Mapped[str] = mapped_column(Text)
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, default=None)
 
     scope: Mapped[str] = mapped_column(String(512))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

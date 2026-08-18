@@ -8,13 +8,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from relay_api.auth.router import router as auth_router
 from relay_api.connectors.router import router as connectors_router
 from relay_api.core.config import get_settings
 from relay_api.core.logging import configure_logging, get_logger
+from relay_api.engine.indexing.embeddings import EmbeddingUnavailableError
 from relay_api.features.context_search.router import router as context_search_router
 
 settings = get_settings()
@@ -53,6 +55,23 @@ def create_app() -> FastAPI:
     @app.get("/healthz", tags=["health"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.exception_handler(EmbeddingUnavailableError)
+    async def embedding_unavailable_handler(
+        _request: Request, exc: EmbeddingUnavailableError
+    ) -> JSONResponse:
+        # Every search and indexing run depends on embeddings unconditionally
+        # (ADR 0006/0008) — a failure here is "the feature is down", not
+        # something to fall back from. Logged with the real cause; the
+        # client gets a clean message instead of a raw 500 + stack trace.
+        logger.warning("embedding_unavailable", extra={"error": str(exc)})
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Search is temporarily unavailable — the embeddings "
+                "provider had an error. Try again shortly."
+            },
+        )
 
     return app
 

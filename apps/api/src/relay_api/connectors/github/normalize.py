@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any
 
+from relay_api.connectors.text_utils import truncate_title
 from relay_api.engine.ingestion.schemas import NormalizedItem
 
 
@@ -9,7 +10,7 @@ def normalize_pull_request(pr: dict[str, Any], repo_full_name: str) -> Normalize
         source="github",
         source_type="pull_request",
         external_id=str(pr["id"]),
-        title=pr["title"],
+        title=truncate_title(pr["title"]),
         body=pr.get("body") or "",
         url=pr["html_url"],
         author=(pr.get("user") or {}).get("login"),
@@ -27,13 +28,13 @@ def normalize_commit(commit: dict[str, Any], repo_full_name: str) -> NormalizedI
     github_user = commit.get("author") or {}
 
     message = commit_data.get("message", "")
-    title = message.splitlines()[0] if message else "(no commit message)"
+    first_line = message.splitlines()[0] if message else "(no commit message)"
 
     return NormalizedItem(
         source="github",
         source_type="commit",
         external_id=commit["sha"],
-        title=title,
+        title=truncate_title(first_line),
         body=message,
         url=commit["html_url"],
         author=github_user.get("login") or git_author.get("name"),

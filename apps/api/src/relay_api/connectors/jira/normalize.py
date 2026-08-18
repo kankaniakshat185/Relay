@@ -3,6 +3,7 @@ from typing import Any
 
 from dateutil import parser as date_parser
 
+from relay_api.connectors.text_utils import truncate_title
 from relay_api.engine.ingestion.schemas import NormalizedItem
 
 
@@ -37,7 +38,7 @@ def normalize_issue(issue: dict[str, Any], site_url: str) -> NormalizedItem:
         source="jira",
         source_type="issue",
         external_id=issue["id"],
-        title=fields["summary"],
+        title=truncate_title(fields["summary"]),
         body=_adf_to_text(fields.get("description")),
         url=f"{site_url}/browse/{issue['key']}",
         author=assignee.get("displayName"),

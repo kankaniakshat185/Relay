@@ -5,6 +5,7 @@ Single source of truth for settings — nothing else in the app should read
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +64,19 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     embedding_model: str = "text-embedding-3-small"
     synthesis_model: str = "gpt-4o-mini"
+
+    # --- Embedding provider switch (ADR 0009). Unlike synthesis, this is
+    # NOT per-request BYOK — embeddings are unconditional core infra
+    # (every search and every indexing run needs one), so this is a
+    # server-wide setting, not something a request chooses. "gemini" is a
+    # genuinely free stand-in (no billing account needed) for testing
+    # before OpenAI billing is set up; switching back later means flipping
+    # this one value, no code change. ---
+    embedding_provider: Literal["openai", "gemini"] = Field(
+        default="openai", alias="EMBEDDING_PROVIDER"
+    )
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_embedding_model: str = "gemini-embedding-001"
 
     # --- BYOK synthesis model defaults, one per provider (ADR 0008).
     # Only used when the request supplies its own key for that provider —

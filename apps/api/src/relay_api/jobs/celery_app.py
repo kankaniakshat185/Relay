@@ -13,4 +13,9 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-celery_app.autodiscover_tasks(["relay_api.jobs"])
+# related_name="indexing", not the default "tasks" — our task module is
+# jobs/indexing.py, not jobs/tasks.py. Without this, autodiscover silently
+# finds nothing (confirmed by an empty [tasks] list at worker startup) and
+# every connector-connect indexing job would just vanish into the queue
+# with no worker registered to run it.
+celery_app.autodiscover_tasks(["relay_api.jobs"], related_name="indexing")

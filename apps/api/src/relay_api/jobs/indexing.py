@@ -13,7 +13,7 @@ from relay_api.connectors.github import ingest as github_ingest
 from relay_api.connectors.jira import ingest as jira_ingest
 from relay_api.connectors.models import ConnectorCredential
 from relay_api.connectors.slack import ingest as slack_ingest
-from relay_api.core.db import async_session_factory
+from relay_api.core.db import async_session_factory, engine
 from relay_api.core.logging import get_logger
 from relay_api.engine.indexing import service as indexing_service
 from relay_api.engine.ingestion import service as ingestion_service
@@ -40,6 +40,23 @@ async def _fetch_items(
 
 
 async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None:
+    # `core/db.py`'s engine is a module-level singleton — correct for
+    # FastAPI, which keeps one event loop for the process's whole
+    # lifetime. Celery's prefork workers don't: the same worker child
+    # process handles many tasks over its life, and `index_connector_task`
+    # below calls `asyncio.run(...)`, which spins up a *new* event loop
+    # every single task. The engine's connection pool binds to whichever
+    # loop first touches it; the next task in that same worker process
+    # then hands the pool a stale, already-closed loop and asyncpg blows
+    # up with "attached to a different loop". Found live: GitHub and Slack
+    # indexing (each worker process's first task) worked fine; Jira's
+    # retry, routed to an already-used worker process, silently failed
+    # with zero rows ever reaching the DB. Disposing the pool at the start
+    # of every task forces fresh connections bound to *this* task's loop —
+    # SQLAlchemy's own documented fix for exactly this asyncio-multi-loop
+    # scenario.
+    await engine.dispose()
+
     async with async_session_factory() as db:
         credential = await connector_service.get_credential(db, user_id, provider)
         if credential is None:
