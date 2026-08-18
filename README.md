@@ -15,10 +15,13 @@ things are the way they are.
 
 Phase 1 (Context Searcher vertical slice) — see [`plan.md` §5](plan.md#5-phases)
 for the phase plan. Login OAuth (GitHub/Slack/Google), connector OAuth
-(GitHub/Slack/Jira, read-only), the correlation engine (ingestion + hybrid
-keyword/vector indexing, ADR 0006), and the Context Searcher (retrieval +
-OpenAI synthesis, ADR 0007) are wired end-to-end. Archaeology and
-Who-Should-I-Ask (querying the same engine) land in Phase 2.
+(GitHub/Slack/Jira, read-only — GitHub covers PRs and commit messages),
+and the correlation engine (ingestion + hybrid keyword/vector indexing,
+ADR 0006) are wired end-to-end. The Context Searcher has two modes:
+raw retrieval (default, no LLM, always free) and an optional AI-summary
+mode across OpenAI/Groq/Anthropic/Gemini — BYOK, or a rate-limited OpenAI
+free tier (ADR 0007, ADR 0008). Archaeology and Who-Should-I-Ask (querying
+the same engine) land in Phase 2.
 
 ## Repo layout
 

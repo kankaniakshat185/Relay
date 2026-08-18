@@ -110,3 +110,16 @@
   Phase 2, but should land before this is used somewhere long-lived.
 - Ingestion/indexing status visibility in the frontend — candidate for a
   small addition alongside Phase 2's UI work, not a blocker.
+
+## Addendum: raw/LLM split + multi-provider BYOK
+
+Landed after this retro was written, still within Phase 1 scope (no new
+phase). The Context Searcher originally always called OpenAI for
+synthesis (ADR 0007). It now defaults to a raw retrieval mode — sources
+with excerpts and direct links, zero LLM involvement, always free — with
+LLM synthesis as an explicit opt-in across four providers (OpenAI, Groq,
+Anthropic, Gemini), BYOK or a small rate-limited OpenAI free tier. Also:
+the GitHub connector now ingests commit messages alongside PRs, not PRs
+only. Full rationale in ADR 0008; this file's "what shipped"/"what was
+harder than expected" sections above are left as the accurate record of
+this phase's original ship date, not rewritten.

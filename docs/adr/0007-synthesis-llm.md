@@ -1,6 +1,10 @@
 # ADR 0007: OpenAI for context-search answer synthesis
 
-**Status:** Accepted — pre-Phase 1
+**Status:** Accepted — pre-Phase 1. Extended by
+[ADR 0008](0008-raw-and-llm-search-modes-byok.md), which adds a raw
+(no-LLM) mode plus BYOK support for Groq/Anthropic/Gemini — the reasoning
+below for why OpenAI specifically is the *default*/free-tier provider
+still holds and isn't rewritten here.
 
 ## What
 
