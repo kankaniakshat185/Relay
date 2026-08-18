@@ -58,10 +58,22 @@ class Settings(BaseSettings):
     jira_connector_client_id: str = Field(default="", alias="JIRA_CONNECTOR_CLIENT_ID")
     jira_connector_client_secret: str = Field(default="", alias="JIRA_CONNECTOR_CLIENT_SECRET")
 
-    # --- OpenAI: embeddings (ADR 0006) + context-search synthesis (ADR 0007) ---
+    # --- OpenAI: embeddings (ADR 0006, always server-funded) + the
+    # free-tier context-search synthesis default (ADR 0007) ---
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     embedding_model: str = "text-embedding-3-small"
     synthesis_model: str = "gpt-4o-mini"
+
+    # --- BYOK synthesis model defaults, one per provider (ADR 0008).
+    # Only used when the request supplies its own key for that provider —
+    # the free tier is OpenAI-only, these are never paid for by Relay. ---
+    groq_synthesis_model: str = "llama-3.3-70b-versatile"
+    anthropic_synthesis_model: str = "claude-haiku-4-5-20251001"
+    gemini_synthesis_model: str = "gemini-2.5-flash"
+
+    # Free-tier LLM-mode calls per user per day, using the server's own
+    # key. BYOK requests bypass this entirely — see ADR 0008.
+    free_llm_daily_limit: int = Field(default=5, alias="FREE_LLM_DAILY_LIMIT")
 
     # --- Observability ---
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")

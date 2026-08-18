@@ -22,7 +22,7 @@ const PROVIDER_LABELS: Record<ConnectorProvider, string> = {
 };
 
 const PROVIDER_DESCRIPTIONS: Record<ConnectorProvider, string> = {
-  github: "Repository context — recent pull requests across repos you have access to.",
+  github: "Repository context — recent pull requests and commit messages across repos you have access to.",
   slack: "Workspace context — recent messages in channels the Relay bot has joined.",
   jira: "Issue context — recent issues from your first accessible Jira Cloud site.",
 };

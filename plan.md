@@ -20,7 +20,7 @@
 | Job queue / scheduling | Redis + Celery | Powers webhook ingestion, polling jobs, background indexing |
 | Vector search | pgvector on Neon Postgres | Not a separate vector DB — see `docs/adr/0006-embedding-and-vector-search.md` |
 | Embeddings | OpenAI `text-embedding-3-small` | See ADR 0006 |
-| Answer synthesis (Context Searcher) | OpenAI chat completion | Same vendor as embeddings, different call — see `docs/adr/0007-synthesis-llm.md` |
+| Answer synthesis (Context Searcher) | Optional — off by default (raw retrieval mode). When on: OpenAI, Groq, Anthropic, or Gemini, BYOK or a rate-limited OpenAI free tier | See `docs/adr/0007-synthesis-llm.md` (initial OpenAI-only decision) and `docs/adr/0008-raw-and-llm-search-modes-byok.md` (raw/LLM split + multi-provider BYOK) |
 | Auth (login) | OAuth via GitHub / Slack / Google — minimal scopes, session-only | Separate from data-access connectors, see §4 |
 | Auth (data access) | Per-provider OAuth with broader scopes, connected post-login | |
 | Type checking | mypy (strict mode) — backend; TypeScript strict mode — frontend | |

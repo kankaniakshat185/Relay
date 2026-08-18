@@ -4,6 +4,7 @@ mocked — this is testing the SQL, not the embedding model — but the actual
 `to_tsvector`/`cosine_distance`/`ON CONFLICT` queries run for real.
 """
 
+import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
@@ -73,7 +74,10 @@ async def test_index_then_search_finds_the_item(db: AsyncSession, test_user: Use
 
 
 async def test_search_is_scoped_to_the_requesting_user(db: AsyncSession, test_user: User) -> None:
-    other_user = User(email="other@example.com", display_name="Other User")
+    # Randomized, not a fixed address — this insert commits durably (see
+    # below), so a fixed email breaks on the second run against a
+    # persistent local Postgres (fine in CI, which always starts fresh).
+    other_user = User(email=f"{uuid.uuid4()}@example.com", display_name="Other User")
     db.add(other_user)
     await db.commit()
     await db.refresh(other_user)

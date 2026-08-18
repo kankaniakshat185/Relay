@@ -7,6 +7,7 @@ from relay_api.engine.ingestion.schemas import NormalizedItem
 
 _REPO_LIMIT = 10
 _PR_LIMIT_PER_REPO = 20
+_COMMIT_LIMIT_PER_REPO = 20
 
 
 async def fetch_normalized_items(access_token: str) -> list[NormalizedItem]:
@@ -14,9 +15,16 @@ async def fetch_normalized_items(access_token: str) -> list[NormalizedItem]:
 
     items: list[NormalizedItem] = []
     for repo in repos:
+        owner, name = repo["owner"]["login"], repo["name"]
+
         prs = await client.list_recent_pull_requests(
-            access_token, repo["owner"]["login"], repo["name"], limit=_PR_LIMIT_PER_REPO
+            access_token, owner, name, limit=_PR_LIMIT_PER_REPO
         )
         items.extend(normalize.normalize_pull_request(pr, repo["full_name"]) for pr in prs)
+
+        commits = await client.list_recent_commits(
+            access_token, owner, name, limit=_COMMIT_LIMIT_PER_REPO
+        )
+        items.extend(normalize.normalize_commit(commit, repo["full_name"]) for commit in commits)
 
     return items

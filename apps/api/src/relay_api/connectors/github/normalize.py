@@ -16,3 +16,27 @@ def normalize_pull_request(pr: dict[str, Any], repo_full_name: str) -> Normalize
         occurred_at=datetime.fromisoformat(pr["updated_at"].replace("Z", "+00:00")),
         extra={"repo": repo_full_name, "state": pr["state"], "number": pr["number"]},
     )
+
+
+def normalize_commit(commit: dict[str, Any], repo_full_name: str) -> NormalizedItem:
+    commit_data = commit["commit"]
+    git_author = commit_data.get("author") or {}
+    # `author` (linked GitHub account) may be null for commits from
+    # emails GitHub can't match to a user — fall back to the raw git
+    # author name in that case.
+    github_user = commit.get("author") or {}
+
+    message = commit_data.get("message", "")
+    title = message.splitlines()[0] if message else "(no commit message)"
+
+    return NormalizedItem(
+        source="github",
+        source_type="commit",
+        external_id=commit["sha"],
+        title=title,
+        body=message,
+        url=commit["html_url"],
+        author=github_user.get("login") or git_author.get("name"),
+        occurred_at=datetime.fromisoformat(git_author["date"].replace("Z", "+00:00")),
+        extra={"repo": repo_full_name, "sha": commit["sha"][:7]},
+    )

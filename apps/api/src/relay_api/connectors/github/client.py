@@ -42,3 +42,19 @@ async def list_recent_pull_requests(
         response.raise_for_status()
         pulls: list[dict[str, Any]] = response.json()
         return pulls
+
+
+async def list_recent_commits(
+    access_token: str, owner: str, repo: str, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Commit messages only — no diffs/patches. Already chronological
+    (most recent first) on the default branch; no sort param needed."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/commits",
+            headers=_headers(access_token),
+            params={"per_page": limit},
+        )
+        response.raise_for_status()
+        commits: list[dict[str, Any]] = response.json()
+        return commits

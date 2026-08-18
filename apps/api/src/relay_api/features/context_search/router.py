@@ -17,4 +17,11 @@ async def context_search(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContextSearchResponse:
-    return await service.search(db, current_user, request.query)
+    return await service.search(
+        db,
+        current_user,
+        request.query,
+        use_llm=request.use_llm,
+        llm_provider=request.llm_provider,
+        byok_api_key=request.api_key,
+    )
