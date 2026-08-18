@@ -8,6 +8,12 @@ resolve the cloud id every subsequent API call needs
 Phase 1 limitation, documented not accidental: only the first accessible
 site is connected — same one-account-per-provider simplification as
 `connectors/models.py`.
+
+Access tokens are short-lived (~1hr) and `offline_access` was requested
+specifically so a refresh token comes back with them — `refresh_access_token`
+below is what `connectors/service.ensure_valid_access_token` calls once a
+token is close to expiring, so indexing survives past the first hour
+without a manual reconnect.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -15,7 +21,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from relay_api.connectors.base import ConnectorAccount
+from relay_api.connectors.base import ConnectorAccount, RefreshedTokens
 from relay_api.core.config import get_settings
 
 _AUTHORIZE_URL = "https://auth.atlassian.com/authorize"
@@ -80,4 +86,33 @@ async def exchange_code(code: str, redirect_uri: str) -> ConnectorAccount:
         scope=token_data.get("scope", _SCOPE),
         external_account_id=site["id"],  # cloud id — needed for every API call, see client.py
         external_account_label=site["url"],
+    )
+
+
+async def refresh_access_token(refresh_token: str) -> RefreshedTokens:
+    settings = get_settings()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            _TOKEN_URL,
+            json={
+                "grant_type": "refresh_token",
+                "client_id": settings.jira_connector_client_id,
+                "client_secret": settings.jira_connector_client_secret,
+                "refresh_token": refresh_token,
+            },
+        )
+        response.raise_for_status()
+        token_data = response.json()
+
+    expires_in = token_data.get("expires_in")
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in) if expires_in else None
+
+    return RefreshedTokens(
+        access_token=token_data["access_token"],
+        # Atlassian rotates the refresh token on every use (that's what
+        # offline_access buys you) — the old one stops working the moment
+        # this response comes back, so a fresh one always comes with it.
+        # Falling back to the input is just defensive, not the expected path.
+        refresh_token=token_data.get("refresh_token", refresh_token),
+        expires_at=expires_at,
     )

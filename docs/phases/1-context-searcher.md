@@ -106,8 +106,11 @@
 - Whether Neon branch-per-PR gets adopted later for CI (unchanged from
   Phase 0 — still Dockerized Postgres, now `pgvector/pgvector:pg16`
   specifically; revisit only if it causes real friction).
-- Token refresh for GitHub/Jira connector credentials — not blocking
-  Phase 2, but should land before this is used somewhere long-lived.
+- ~~Token refresh for GitHub/Jira connector credentials~~ — done for Jira
+  (the only one that actually issues short-lived tokens today), see the
+  addendum below. GitHub's classic OAuth app tokens don't expire, so
+  there's nothing to refresh there yet; revisit only if GitHub ever moves
+  to a GitHub App with expiring tokens.
 - Ingestion/indexing status visibility in the frontend — candidate for a
   small addition alongside Phase 2's UI work, not a blocker.
 
@@ -157,8 +160,8 @@ long-running worker process:
   activity" the way GitHub/Slack already scope themselves.
 - **Jira's access token expiry is the "no refresh flow" gap, hit for
   real.** Flagged as an open item in this retro's first draft; a ~1 hour
-  token expiry during a testing session made it concrete. Still open —
-  reconnecting is the workaround for now.
+  token expiry during a testing session made it concrete. Reconnecting
+  was the workaround at the time — since resolved, see the addendum below.
 - **Gemini's batch embedding endpoint caps at 100 items per call**; a
   single GitHub indexing pass (10 repos × up to 40 PRs+commits each) can
   produce ~400. OpenAI's much higher limit is why this never surfaced
@@ -185,3 +188,28 @@ long-running worker process:
 None of these were architecture mistakes — the design held up. They were
 all "the real world doesn't match the mock" gaps, found because the
 system got run for real before being called done.
+
+## Addendum: Jira token refresh
+
+Closes the "no token refresh flow" gap called out above and in "open
+items carried forward" — manual reconnection was the only recovery from
+Jira's ~1 hour access token expiry.
+
+- `connectors/base.py` gained a second, optional `RefreshableConnectorProvider`
+  protocol (plus a `RefreshedTokens` result type) — deliberately separate
+  from `ConnectorProvider` rather than adding a required method to it,
+  since GitHub's classic OAuth tokens and Slack's bot tokens don't expire
+  and have nothing to implement here.
+- `connectors/registry.get_refreshable_provider(name)` is the single place
+  that knows only Jira implements it today — `None` for everything else,
+  treated as "nothing to refresh" rather than an error.
+- `connectors/service.ensure_valid_access_token(db, credential)` is the
+  new entry point: passes non-expiring or not-yet-expiring tokens straight
+  through, and for anything else expired with a refresh path available,
+  calls the provider's refresh grant, persists the (Atlassian rotates
+  these) new access + refresh tokens and expiry, and returns the fresh
+  token — all before `jobs/indexing.py` makes a single API call.
+- A refresh grant itself failing (revoked/expired refresh token — the one
+  case reconnecting is still genuinely required for) raises
+  `TokenRefreshError`; `_run_indexing_for_connector` catches it, logs a
+  warning, and skips that run instead of the job crashing outright.

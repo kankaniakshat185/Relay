@@ -32,3 +32,26 @@ class ConnectorProvider(Protocol):
     def authorization_url(self, redirect_uri: str, state: str) -> str: ...
 
     async def exchange_code(self, code: str, redirect_uri: str) -> ConnectorAccount: ...
+
+
+@dataclass(frozen=True)
+class RefreshedTokens:
+    """Result of successfully refreshing an expired access token — see
+    `RefreshableConnectorProvider`. Deliberately not `ConnectorAccount`: a
+    refresh never changes which external account is connected, so there's
+    no `external_account_id`/`external_account_label` to carry."""
+
+    access_token: str
+    refresh_token: str | None
+    expires_at: datetime | None
+
+
+class RefreshableConnectorProvider(Protocol):
+    """A second, optional protocol — not every provider needs it. Slack's
+    bot tokens don't expire under the classic install flow and GitHub's
+    classic OAuth app tokens are long-lived, so only providers that
+    actually issue short-lived access tokens implement this (Jira,
+    currently). `connectors/registry.get_refreshable_provider` is the
+    single place that knows which ones do."""
+
+    async def refresh_access_token(self, refresh_token: str) -> RefreshedTokens: ...

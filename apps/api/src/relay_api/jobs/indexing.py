@@ -65,7 +65,18 @@ async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None
             )
             return
 
-        access_token = connector_service.decrypted_access_token(credential)
+        try:
+            access_token = await connector_service.ensure_valid_access_token(db, credential)
+        except connector_service.TokenRefreshError:
+            # The refresh grant itself failed (revoked/expired refresh
+            # token) — not something to retry from inside this task.
+            # Reconnecting via the Connections page is the recovery path.
+            logger.warning(
+                "index_job_token_refresh_failed",
+                extra={"user_id": str(user_id), "provider": provider},
+            )
+            return
+
         items = await _fetch_items(provider, access_token, credential)
 
         await ingestion_service.upsert_items(db, user_id, items)
