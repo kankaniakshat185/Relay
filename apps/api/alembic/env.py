@@ -18,6 +18,7 @@ from relay_api.connectors import models as connector_models  # noqa: E402, F401
 from relay_api.core.config import get_settings  # noqa: E402
 from relay_api.core.db import Base  # noqa: E402
 from relay_api.engine.ingestion import models as ingestion_models  # noqa: E402, F401
+from relay_api.features.flaky_tests import models as flaky_tests_models  # noqa: E402, F401
 
 # Note: autogenerate does NOT add the `import pgvector.sqlalchemy` a new
 # Vector column needs — it renders `pgvector.sqlalchemy.vector.VECTOR(...)`

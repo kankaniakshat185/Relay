@@ -79,6 +79,82 @@ async def list_directory_contents(
         return entries
 
 
+async def list_workflow_runs(
+    access_token: str, owner: str, repo: str, *, per_page: int = 50
+) -> list[dict[str, Any]]:
+    """Every GitHub Actions workflow run for the repo, most recent first —
+    one call covers every workflow (each run object carries its own
+    `name`), no separate "list workflows" call needed. Used by
+    `features/flaky_tests` (ADR 0018) — no other module reaches into
+    Actions. Unlike every other list endpoint in this file, the response
+    is `{"total_count": N, "workflow_runs": [...]}`, not a bare array —
+    unwrapped here so callers get the same plain-list shape as everything
+    else."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/actions/runs",
+            headers=_headers(access_token),
+            params={"per_page": per_page},
+        )
+        response.raise_for_status()
+        data = response.json()
+        runs: list[dict[str, Any]] = data.get("workflow_runs", [])
+        return runs
+
+
+async def get_workflow_run_attempt(
+    access_token: str, owner: str, repo: str, run_id: int, attempt_number: int
+) -> dict[str, Any]:
+    """One specific attempt's own recorded outcome — unlike
+    `list_workflow_runs`, which only ever reflects a run's *latest*
+    attempt. Used by `features/flaky_tests` to fetch attempt 1's real
+    `conclusion` for a re-run, so a same-commit re-run's flakiness
+    evidence can be a genuine before/after comparison instead of an
+    assumption (see `WorkflowRun.first_attempt_conclusion`)."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        run: dict[str, Any] = response.json()
+        return run
+
+
+async def list_run_artifacts(
+    access_token: str, owner: str, repo: str, run_id: int
+) -> list[dict[str, Any]]:
+    """Artifacts attached to one workflow run — same `{"total_count",
+    "artifacts": [...]}` envelope shape as `list_workflow_runs`, unwrapped
+    the same way. Used by `features/flaky_tests`'s best-effort
+    individual-test-case parsing (ADR 0019)."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/actions/runs/{run_id}/artifacts",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        data = response.json()
+        artifacts: list[dict[str, Any]] = data.get("artifacts", [])
+        return artifacts
+
+
+async def download_artifact(access_token: str, owner: str, repo: str, artifact_id: int) -> bytes:
+    """Downloads one artifact as a zip. GitHub responds with a redirect
+    to a temporary blob URL — `follow_redirects=True` is needed here
+    specifically; every other call in this file only ever hits GitHub's
+    API directly and never redirects. Binary; callers are expected to
+    check the artifact's `size_in_bytes` (from `list_run_artifacts`)
+    before calling this, not after."""
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        return response.content
+
+
 async def list_pr_reviews(
     access_token: str, owner: str, repo: str, pr_number: int
 ) -> list[dict[str, Any]]:

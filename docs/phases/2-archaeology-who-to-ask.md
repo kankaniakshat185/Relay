@@ -196,3 +196,25 @@ authorship. Archaeology also gained the same review data —
 (most recent review verdict is CHANGES_REQUESTED with no later APPROVED)
 — deepening its existing "why does this exist" story, not just closing
 the ranking gap.
+
+## Addendum: "related" wasn't the same as "relevant"
+
+Found live, not in review: a commit with genuinely zero related Slack
+activity was still showing three "Related Slack discussion" messages —
+because `engine.indexing.service.search()`'s `ORDER BY score LIMIT N`
+always returns up to `N` rows regardless of how weak the match is. With a
+small ingested corpus (4 Slack messages total on the account this was
+found against), the three weakest-possible matches filled the slot every
+time, correct ranking, no relevance floor at all.
+
+Closed via ADR 0020: `search()` gained an optional `min_score` filter,
+and `engine.correlation.find_related` calls it with a threshold
+(`0.48`) derived from real scores on this account's data, not a guessed
+number — genuine exact-key matches scored 0.579–0.66, unrelated noise
+topped out at 0.384. Raising the bar alone would have risked hiding a
+real match with unusually weak vector similarity for that specific text
+pairing, so a second piece landed alongside it: `_find_exact_ticket_key_matches`,
+a direct substring check that bypasses the threshold (and the embedding
+requirement) entirely whenever the query is exactly a ticket key —
+meaning the stricter threshold can only ever cut weaker semantic-only
+noise, never a confirmed real mention.

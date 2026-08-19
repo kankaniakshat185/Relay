@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { useCurrentUser } from "@/components/AuthGuard";
 import { DisplayHeading } from "@/components/editorial/DisplayHeading";
 import { EditorialLinkButton } from "@/components/editorial/EditorialButton";
 import { Rule } from "@/components/editorial/Rule";
@@ -39,9 +38,10 @@ const FEATURES = [
   {
     n: "04",
     title: "Flaky Test Investigator",
-    description: "Correlates CI failures against historical flakiness patterns and recent related PRs.",
-    status: "upcoming" as const,
-    href: null,
+    description:
+      "Tracks each workflow's pass/fail history and flags what looks flaky rather than genuinely broken — a same-commit re-run succeeding is the clearest sign.",
+    status: "live" as const,
+    href: "/flaky-tests",
     span: "md:col-span-6",
   },
   {
@@ -56,14 +56,9 @@ const FEATURES = [
 ];
 
 export default function DashboardHome() {
-  const user = useCurrentUser();
-
   return (
     <div>
-      <SectionLabel tone="muted">Signed in as {user.display_name}</SectionLabel>
-      <SectionLabel tone="brand" className="mt-6">
-        Relay / Context Engine
-      </SectionLabel>
+      <SectionLabel tone="brand">Relay / Context Engine</SectionLabel>
       <DisplayHeading size="xl" className="text-ink mt-3 max-w-4xl">
         Your engineering context, connected.
       </DisplayHeading>
@@ -84,13 +79,6 @@ export default function DashboardHome() {
                 {feature.title}
               </DisplayHeading>
               <p className="text-muted mt-3 max-w-sm text-sm leading-relaxed">{feature.description}</p>
-              <p
-                className={`mt-6 text-xs font-medium tracking-[0.2em] uppercase ${
-                  feature.status === "live" ? "text-brand" : "text-muted"
-                }`}
-              >
-                {feature.status}
-              </p>
             </>
           );
           const className = `border-line group block border-b py-10 ${feature.span} ${

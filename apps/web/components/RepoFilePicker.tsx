@@ -40,11 +40,12 @@ export interface RepoFileSelection {
  *
  * `featureLabel` is optional, additive presentation only — when a caller
  * passes one (Archaeology passes `"Archaeology"`), the repo-browsing view
- * gains a small contextual label, a quieter "change repo" placement, and
- * "Whole repository"/"Files" section labels. When omitted (Who Should I
- * Ask doesn't pass it), the component renders exactly as it did before
- * this prop existed — this was a deliberate design pass scoped to
- * Archaeology only, not a shared redesign. */
+ * gains a "Whole repository" callout box and a "Files" section label above
+ * the directory listing, and `analyzeButton`'s copy reads "entire
+ * repository" instead of "whole repo". When omitted (Who Should I Ask
+ * doesn't pass it), the component renders exactly as it did before this
+ * prop existed. The repo-name header and "Change repo" placement are
+ * shared, not feature-specific — both callers get the same treatment. */
 export function RepoFilePicker({
   basePath,
   onSelect,
@@ -292,8 +293,17 @@ export function RepoFilePicker({
       onClick={changeRepo}
       className="text-muted hover:text-ink shrink-0 text-xs font-medium tracking-[0.15em] uppercase transition-colors"
     >
-      {featureLabel ? "Change repo →" : "Change repo"}
+      Change repo
     </button>
+  );
+
+  const header = (
+    <div className="flex items-baseline gap-4">
+      <SectionLabel tone="brand" className="truncate">
+        {repo.full_name}
+      </SectionLabel>
+      {changeRepoButton}
+    </div>
   );
 
   const analyzeButton = (
@@ -310,16 +320,8 @@ export function RepoFilePicker({
     <div>
       {featureLabel ? (
         <>
-          <SectionLabel tone="muted" className="text-[10px] tracking-[0.25em]">
-            {featureLabel} / {repo.name}
-          </SectionLabel>
-          <SectionLabel tone="brand" className="mt-2 truncate">
-            {repo.full_name}
-          </SectionLabel>
-          <div className="mt-3 flex items-center justify-between gap-4">
-            {breadcrumb}
-            {changeRepoButton}
-          </div>
+          {header}
+          <div className="mt-2">{breadcrumb}</div>
 
           <SectionLabel tone="muted" className="mt-8">
             Whole repository
@@ -334,12 +336,7 @@ export function RepoFilePicker({
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-4">
-            <SectionLabel tone="brand" className="truncate">
-              {repo.full_name}
-            </SectionLabel>
-            {changeRepoButton}
-          </div>
+          {header}
           <div className="mt-2">{breadcrumb}</div>
           <div className="mt-4">{analyzeButton}</div>
           <Rule className="mt-4" />

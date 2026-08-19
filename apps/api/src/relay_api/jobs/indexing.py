@@ -7,6 +7,7 @@ this orchestration layer stays provider-agnostic past the initial dispatch.
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 from relay_api.connectors import service as connector_service
 from relay_api.connectors.github import ingest as github_ingest
@@ -82,6 +83,13 @@ async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None
         await ingestion_service.upsert_items(db, user_id, items)
         to_index = await ingestion_service.get_items_needing_indexing(db, user_id)
         await indexing_service.index_items(db, to_index)
+
+        # Set regardless of whether anything new was found — "last synced"
+        # is a freshness signal about the sync itself having run, not
+        # about whether it turned anything up (see the column's own
+        # docstring for why this matters for the Connections page).
+        credential.last_synced_at = datetime.now(UTC)
+        await db.commit()
 
         logger.info(
             "index_job_completed",

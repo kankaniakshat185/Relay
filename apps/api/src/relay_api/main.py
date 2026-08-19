@@ -21,6 +21,7 @@ from relay_api.engine.code_context.service import CodeContextError
 from relay_api.engine.indexing.embeddings import EmbeddingUnavailableError
 from relay_api.features.archaeology.router import router as archaeology_router
 from relay_api.features.context_search.router import router as context_search_router
+from relay_api.features.flaky_tests.router import router as flaky_tests_router
 from relay_api.features.who_to_ask.router import router as who_to_ask_router
 
 settings = get_settings()
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     v1.include_router(context_search_router)
     v1.include_router(archaeology_router)
     v1.include_router(who_to_ask_router)
+    v1.include_router(flaky_tests_router)
     app.include_router(v1)
 
     @app.get("/healthz", tags=["health"])

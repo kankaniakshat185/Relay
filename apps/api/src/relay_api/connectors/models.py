@@ -52,3 +52,14 @@ class ConnectorCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    """When `jobs.indexing._run_indexing_for_connector` last *completed*
+    for this connector — not "when it was last attempted," and
+    deliberately not `updated_at` (that tracks credential/token changes,
+    e.g. a silent refresh, which says nothing about whether this
+    provider's actual content has been re-synced). Set regardless of
+    whether the sync found anything new, so "last synced 3 minutes ago"
+    is an honest freshness signal even in the common case of no new
+    activity — found live: `celery beat` had silently not been running
+    for ~24 hours with zero way for a user to notice from the UI."""

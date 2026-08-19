@@ -43,6 +43,37 @@ class ConnectorNotConnectedError(Exception):
         super().__init__(f"{provider} is not connected")
 
 
+_SYNC_COOLDOWN = timedelta(seconds=60)
+"""Manual "Sync now" (Connections page) guard against accidental
+repeated-click spam — each sync makes real GitHub/Slack/Jira API calls.
+Approximate, not airtight: it's checked against `last_synced_at`, which
+only updates when a sync *completes* (a real one typically takes 15-40s
+including PR reviews), so several rapid clicks *before* the first
+completes could each still dispatch — this catches the common case
+(clicking again shortly after a completed sync), not a determined abuser.
+A proper "sync in progress" flag would close that gap but wasn't needed
+to fix the actual problem (a user having zero visibility or control over
+staleness at all)."""
+
+
+class SyncCooldownError(Exception):
+    """Raised by `check_sync_allowed` when a manual sync was requested too
+    soon after the last one completed."""
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(f"Sync requested too soon — wait {retry_after_seconds}s")
+
+
+def check_sync_allowed(credential: ConnectorCredential) -> None:
+    if credential.last_synced_at is None:
+        return
+    elapsed = datetime.now(UTC) - credential.last_synced_at
+    remaining = _SYNC_COOLDOWN - elapsed
+    if remaining > timedelta(0):
+        raise SyncCooldownError(retry_after_seconds=int(remaining.total_seconds()) + 1)
+
+
 async def get_credential(
     db: AsyncSession, user_id: uuid.UUID, provider: str
 ) -> ConnectorCredential | None:
@@ -106,6 +137,7 @@ async def list_statuses(db: AsyncSession, user_id: uuid.UUID) -> list[ConnectorS
                 connected[provider].external_account_label if provider in connected else None
             ),
             connected_at=connected[provider].created_at if provider in connected else None,
+            last_synced_at=(connected[provider].last_synced_at if provider in connected else None),
         )
         for provider in ALL_PROVIDERS
     ]

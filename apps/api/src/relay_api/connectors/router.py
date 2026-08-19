@@ -7,6 +7,7 @@ Routes (mounted under `/v1/connectors`):
   GET    ""                          — connection status for all providers
   GET    /{provider}/connect         — redirect to provider's consent screen
   GET    /{provider}/callback        — exchange code, store credential, kick off indexing
+  POST   /{provider}/sync            — manually trigger a re-sync now
   DELETE /{provider}                 — disconnect
 """
 
@@ -100,6 +101,35 @@ async def callback(
     )
     response.delete_cookie(_STATE_COOKIE)
     return response
+
+
+@router.post("/{provider_name}/sync", status_code=status.HTTP_202_ACCEPTED)
+async def sync(
+    provider_name: str, current_user: CurrentUser, db: Annotated[AsyncSession, Depends(get_db)]
+) -> None:
+    """Manually triggers the same per-connector job the periodic 15-minute
+    sweep runs (`jobs.indexing.index_connector_task`) — the fix for a
+    user having no way to know their data might be stale, or to force a
+    fresh sync, between automatic ticks. 202, not 200: this only *queues*
+    the sync; the frontend polls `GET /v1/connectors` for `last_synced_at`
+    moving to know it actually completed."""
+    credential = await service.get_credential(db, current_user.id, provider_name)
+    if credential is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{provider_name} is not connected")
+
+    try:
+        service.check_sync_allowed(credential)
+    except service.SyncCooldownError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Synced recently — try again in {exc.retry_after_seconds}s.",
+        ) from exc
+
+    index_connector_task.delay(str(current_user.id), provider_name)
+    logger.info(
+        "connector_sync_triggered",
+        extra={"user_id": str(current_user.id), "provider": provider_name},
+    )
 
 
 @router.delete("/{provider_name}", status_code=status.HTTP_204_NO_CONTENT)

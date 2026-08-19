@@ -33,7 +33,21 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    throw new ApiError(response.status, `${init?.method ?? "GET"} ${path} failed: ${response.status}`);
+    // FastAPI's standard error shape is `{"detail": "..."}` — a human
+    // sentence when the backend raised `HTTPException(status, "...")`
+    // deliberately (e.g. the sync cooldown message), not just a status
+    // code. Falls back to the generic message if the body isn't JSON or
+    // doesn't have `detail` (a raw 500, a proxy error page, etc.).
+    let message = `${init?.method ?? "GET"} ${path} failed: ${response.status}`;
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === "object" && "detail" in body && typeof body.detail === "string") {
+        message = body.detail;
+      }
+    } catch {
+      // Not JSON — keep the generic message.
+    }
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {

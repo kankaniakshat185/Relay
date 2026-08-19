@@ -21,6 +21,15 @@ celery_app.conf.update(
 # with no worker registered to run it.
 celery_app.autodiscover_tasks(["relay_api.jobs"], related_name="indexing")
 
+# Same reasoning, second task module: jobs/flaky_tests.py won't be found
+# unless it's named explicitly too — `related_name` only matches one
+# module name per call. Two `autodiscover_tasks` calls each register
+# their own `on_after_finalize` hook (Celery supports multiple), not one
+# overwriting the other — confirmed live, not just assumed, given this
+# exact class of bug (a task silently never registering) already bit this
+# app once (see jobs/indexing.py's own comment on the first occurrence).
+celery_app.autodiscover_tasks(["relay_api.jobs"], related_name="flaky_tests")
+
 # Indexing otherwise only ever runs once, at connect time (connectors/router.py's
 # OAuth callback) — nothing re-syncs GitHub/Slack/Jira activity that happens
 # after that. This periodic sweep is the fix, for all three providers at
@@ -34,6 +43,16 @@ celery_app.autodiscover_tasks(["relay_api.jobs"], related_name="indexing")
 celery_app.conf.beat_schedule = {
     "resync-all-connectors": {
         "task": "relay_api.jobs.indexing.resync_all_connectors_task",
+        "schedule": crontab(minute="*/15"),
+    },
+    # Separate task, separate schedule entry (not folded into the resync
+    # above) — this writes to a completely different table
+    # (`flaky_test_workflow_runs`, not `ingested_items`), matching Flaky
+    # Test Investigator's "standalone subsystem" scope (see ADR 0018).
+    # Same 15-minute cadence — no reason for CI-run freshness to lag
+    # everything else's.
+    "resync-all-flaky-tests": {
+        "task": "relay_api.jobs.flaky_tests.resync_all_flaky_tests_task",
         "schedule": crontab(minute="*/15"),
     },
 }

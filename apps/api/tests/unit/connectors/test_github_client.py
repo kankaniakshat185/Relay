@@ -79,3 +79,34 @@ async def test_list_pr_review_comments_returns_the_raw_comments_response() -> No
         result = await client.list_pr_review_comments("token", "acme", "widgets", 42)
 
     assert result == body
+
+
+async def test_list_workflow_runs_unwraps_the_workflow_runs_key() -> None:
+    # Unlike every other list endpoint here, Actions wraps its list in an
+    # envelope object (`{"total_count": N, "workflow_runs": [...]}`), not
+    # a bare array — this is the one thing worth testing in isolation.
+    body = {
+        "total_count": 2,
+        "workflow_runs": [{"id": 1, "name": "CI"}, {"id": 2, "name": "CI"}],
+    }
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response(body))):
+        result = await client.list_workflow_runs("token", "acme", "widgets")
+
+    assert result == body["workflow_runs"]
+
+
+async def test_list_workflow_runs_defaults_to_empty_list_when_key_missing() -> None:
+    with patch.object(
+        client.httpx, "AsyncClient", return_value=_mock_client(_response({"total_count": 0}))
+    ):
+        result = await client.list_workflow_runs("token", "acme", "widgets")
+
+    assert result == []
+
+
+async def test_get_workflow_run_attempt_returns_the_raw_response() -> None:
+    body = {"id": 1, "run_attempt": 1, "conclusion": "failure"}
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response(body))):
+        result = await client.get_workflow_run_attempt("token", "acme", "widgets", 1, 1)
+
+    assert result == body

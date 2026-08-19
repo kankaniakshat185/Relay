@@ -11,13 +11,11 @@ const LIVE_ITEMS = [
   { label: "Search", href: "/search" },
   { label: "Archaeology", href: "/archaeology" },
   { label: "Who to Ask", href: "/who-to-ask" },
+  { label: "Flaky Tests", href: "/flaky-tests" },
   { label: "Connections", href: "/connections" },
 ] as const;
 
-const UPCOMING_ITEMS = [
-  { label: "Flaky Tests", phase: 3 },
-  { label: "Dependency Alerts", phase: 4 },
-] as const;
+const UPCOMING_ITEMS = [{ label: "Dependency Alerts", phase: 4 }] as const;
 
 export function DashboardNav() {
   const user = useCurrentUser();
