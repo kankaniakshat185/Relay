@@ -83,6 +83,15 @@ async def delete_credential(db: AsyncSession, user_id: uuid.UUID, provider: str)
         await db.commit()
 
 
+async def list_all_credentials(db: AsyncSession) -> list[ConnectorCredential]:
+    """Every connected `(user, provider)` pair, across every user — used
+    by the periodic re-sync sweep (`jobs/indexing.resync_all_connectors_task`),
+    the only caller that legitimately needs everyone's credentials at
+    once rather than one user's."""
+    result = await db.execute(select(ConnectorCredential))
+    return list(result.scalars().all())
+
+
 async def list_statuses(db: AsyncSession, user_id: uuid.UUID) -> list[ConnectorStatus]:
     result = await db.execute(
         select(ConnectorCredential).where(ConnectorCredential.user_id == user_id)

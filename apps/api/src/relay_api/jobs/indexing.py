@@ -97,3 +97,34 @@ async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None
 @celery_app.task(name="relay_api.jobs.indexing.index_connector_task")
 def index_connector_task(user_id: str, provider: str) -> None:
     asyncio.run(_run_indexing_for_connector(uuid.UUID(user_id), provider))
+
+
+async def _enqueue_resync_for_all_connectors() -> int:
+    # Same dispose-before-use fix as `_run_indexing_for_connector`, and for
+    # the same reason: Celery Beat fires this task in a worker process that
+    # may have already run other async DB work on a now-closed loop.
+    await engine.dispose()
+
+    async with async_session_factory() as db:
+        credentials = await connector_service.list_all_credentials(db)
+
+    for credential in credentials:
+        index_connector_task.delay(str(credential.user_id), credential.provider)
+
+    return len(credentials)
+
+
+@celery_app.task(name="relay_api.jobs.indexing.resync_all_connectors_task")
+def resync_all_connectors_task() -> None:
+    """Celery Beat fires this on a schedule (see `celery_app.py`) — the fix
+    for indexing otherwise only ever running once, at connect time (found
+    live: a Slack message posted after the initial connect was never
+    searchable until this existed, since nothing re-ran ingestion for it).
+
+    Deliberately thin: reads who's connected to what, then re-enqueues the
+    existing per-connector task for each — no indexing logic duplicated
+    here, and every provider gets the same treatment for free, since
+    `index_connector_task` was already provider-agnostic.
+    """
+    count = asyncio.run(_enqueue_resync_for_all_connectors())
+    logger.info("resync_all_connectors_enqueued", extra={"count": count})

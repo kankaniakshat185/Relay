@@ -213,3 +213,14 @@ Jira's ~1 hour access token expiry.
   case reconnecting is still genuinely required for) raises
   `TokenRefreshError`; `_run_indexing_for_connector` catches it, logs a
   warning, and skips that run instead of the job crashing outright.
+
+## Addendum: periodic re-indexing
+
+This retro's original "open items" implicitly assumed indexing running
+once, at connect time, was good enough for a demo — it wasn't quite:
+found live when a Slack message posted well after the initial connect
+never became searchable, because nothing had ever re-run ingestion for
+it. Closed via a Celery Beat schedule (ADR 0013) that re-runs indexing
+for every connected `(user, provider)` pair every 15 minutes — one
+generic fix for GitHub, Slack, and Jira at once, not three separate
+jobs, since the indexing task was already provider-agnostic.

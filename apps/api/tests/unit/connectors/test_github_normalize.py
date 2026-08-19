@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from relay_api.connectors.github.normalize import normalize_commit, normalize_pull_request
+from relay_api.connectors.github.normalize import (
+    normalize_commit,
+    normalize_pull_request,
+    normalize_review,
+    normalize_review_comment,
+)
 
 
 def test_normalizes_a_pull_request() -> None:
@@ -118,3 +123,116 @@ def test_commit_with_a_long_single_line_message_gets_a_truncated_title() -> None
     assert len(item.title) <= 201  # 200 chars + the ellipsis marker
     assert item.title.startswith("feat:")
     assert item.body == long_message  # full message preserved in body, only title is capped
+
+
+def test_normalizes_a_review_with_a_body() -> None:
+    review = {
+        "id": 80,
+        "user": {"login": "octocat"},
+        "body": "Looks good, one small nit inline.",
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/widgets/pull/7#pullrequestreview-80",
+        "submitted_at": "2026-01-15T10:30:00Z",
+    }
+
+    item = normalize_review(review, repo_full_name="acme/widgets", pr_number=7)
+
+    assert item is not None
+    assert item.source == "github"
+    assert item.source_type == "review_comment"
+    assert item.external_id == "review-80"
+    assert item.body == "Looks good, one small nit inline."
+    assert item.author == "octocat"
+    assert item.url == "https://github.com/acme/widgets/pull/7#pullrequestreview-80"
+    assert item.occurred_at == datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+    assert item.extra == {
+        "repo": "acme/widgets",
+        "pr_number": 7,
+        "kind": "review",
+        "state": "APPROVED",
+    }
+
+
+def test_review_with_an_empty_body_is_skipped() -> None:
+    # A bare "Approve" click with no comment — nothing worth indexing.
+    review = {
+        "id": 81,
+        "user": {"login": "octocat"},
+        "body": "",
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/widgets/pull/7#pullrequestreview-81",
+        "submitted_at": "2026-01-15T10:30:00Z",
+    }
+
+    item = normalize_review(review, repo_full_name="acme/widgets", pr_number=7)
+
+    assert item is None
+
+
+def test_review_with_a_none_body_is_skipped() -> None:
+    review = {
+        "id": 82,
+        "user": {"login": "octocat"},
+        "body": None,
+        "state": "CHANGES_REQUESTED",
+        "html_url": "https://github.com/acme/widgets/pull/7#pullrequestreview-82",
+        "submitted_at": "2026-01-15T10:30:00Z",
+    }
+
+    item = normalize_review(review, repo_full_name="acme/widgets", pr_number=7)
+
+    assert item is None
+
+
+def test_normalizes_a_review_comment() -> None:
+    comment = {
+        "id": 1,
+        "path": "src/x.py",
+        "user": {"login": "octocat"},
+        "body": "Nit: rename this variable.",
+        "html_url": "https://github.com/acme/widgets/pull/7#discussion_r1",
+        "created_at": "2026-01-15T09:00:00Z",
+    }
+
+    item = normalize_review_comment(comment, repo_full_name="acme/widgets", pr_number=7)
+
+    assert item.source == "github"
+    assert item.source_type == "review_comment"
+    assert item.external_id == "review-comment-1"
+    assert item.body == "Nit: rename this variable."
+    assert item.author == "octocat"
+    assert item.occurred_at == datetime(2026, 1, 15, 9, 0, 0, tzinfo=UTC)
+    assert item.extra == {
+        "repo": "acme/widgets",
+        "pr_number": 7,
+        "kind": "comment",
+        "path": "src/x.py",
+    }
+
+
+def test_review_and_review_comment_external_ids_never_collide() -> None:
+    # Reviews and inline comments have separate id namespaces in GitHub's
+    # API — the same numeric id could otherwise land as the same
+    # `external_id` within the shared `review_comment` source_type.
+    review = {
+        "id": 1,
+        "user": {"login": "octocat"},
+        "body": "LGTM",
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/widgets/pull/7#pullrequestreview-1",
+        "submitted_at": "2026-01-15T10:30:00Z",
+    }
+    comment = {
+        "id": 1,
+        "path": "src/x.py",
+        "user": {"login": "octocat"},
+        "body": "Nit.",
+        "html_url": "https://github.com/acme/widgets/pull/7#discussion_r1",
+        "created_at": "2026-01-15T09:00:00Z",
+    }
+
+    review_item = normalize_review(review, repo_full_name="acme/widgets", pr_number=7)
+    comment_item = normalize_review_comment(comment, repo_full_name="acme/widgets", pr_number=7)
+
+    assert review_item is not None
+    assert review_item.external_id != comment_item.external_id

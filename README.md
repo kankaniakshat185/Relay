@@ -66,6 +66,13 @@ uv run --package relay-api uvicorn relay_api.main:app --app-dir apps/api/src --r
 # nothing gets ingested/indexed until it's running.
 uv run --package relay-api celery -A relay_api.jobs.celery_app worker --loglevel=info
 
+# Celery beat (separate terminal) — re-runs indexing for every connected
+# provider every 15 minutes, so activity that happens *after* the initial
+# connect (a new Slack message, a new commit) eventually becomes
+# searchable too, not just what existed at connect time. The worker above
+# still does the actual work; beat just re-triggers it on a schedule.
+uv run --package relay-api celery -A relay_api.jobs.celery_app beat --loglevel=info
+
 # Frontend (separate terminal)
 pnpm install
 cp apps/web/.env.example apps/web/.env.local

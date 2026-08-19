@@ -8,6 +8,7 @@ from relay_api.core.deps import CurrentUser
 from relay_api.features.who_to_ask import service
 from relay_api.features.who_to_ask.schemas import (
     DirectoryEntry,
+    FileSearchMatch,
     RepoOption,
     WhoToAskRequest,
     WhoToAskResponse,
@@ -34,6 +35,15 @@ async def browse(
     return await service.browse(db, current_user, owner, repo, path)
 
 
+@router.get("/search", response_model=list[FileSearchMatch])
+async def search(
+    q: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FileSearchMatch]:
+    return await service.search_files(db, current_user, q)
+
+
 @router.post("/rank", response_model=WhoToAskResponse)
 async def rank(
     request: WhoToAskRequest,
@@ -48,4 +58,5 @@ async def rank(
         ref=request.ref,
         path=request.path,
         strategy=request.strategy,
+        target_type=request.target_type,
     )

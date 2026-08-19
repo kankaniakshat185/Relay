@@ -19,6 +19,64 @@ def normalize_pull_request(pr: dict[str, Any], repo_full_name: str) -> Normalize
     )
 
 
+def normalize_review(
+    review: dict[str, Any], repo_full_name: str, pr_number: int
+) -> NormalizedItem | None:
+    """One top-level review verdict on a PR. Returns `None` for a review
+    with no body — a bare "Approve" click with no comment has nothing
+    worth indexing, and would otherwise show up as an empty-excerpt entry
+    everywhere `find_review_comments_for_pr` is used. `extra.pr_number` is
+    the join key `engine.correlation.find_review_comments_for_pr` filters
+    on directly, not something searched for semantically."""
+    body = review.get("body") or ""
+    if not body.strip():
+        return None
+
+    return NormalizedItem(
+        source="github",
+        source_type="review_comment",
+        # Reviews and inline comments (below) share one source_type but
+        # have separate id namespaces in GitHub's API — prefixed so they
+        # can't collide as the same `external_id`.
+        external_id=f"review-{review['id']}",
+        title=truncate_title(f"Review: {review['state']}"),
+        body=body,
+        url=review["html_url"],
+        author=(review.get("user") or {}).get("login"),
+        occurred_at=datetime.fromisoformat(review["submitted_at"].replace("Z", "+00:00")),
+        extra={
+            "repo": repo_full_name,
+            "pr_number": pr_number,
+            "kind": "review",
+            "state": review["state"],
+        },
+    )
+
+
+def normalize_review_comment(
+    comment: dict[str, Any], repo_full_name: str, pr_number: int
+) -> NormalizedItem:
+    """One inline code comment on a PR — always has a body (GitHub
+    doesn't allow submitting an empty one), unlike a top-level review."""
+    path = comment.get("path", "")
+    return NormalizedItem(
+        source="github",
+        source_type="review_comment",
+        external_id=f"review-comment-{comment['id']}",
+        title=truncate_title(f"Comment on {path}" if path else "Review comment"),
+        body=comment.get("body") or "",
+        url=comment["html_url"],
+        author=(comment.get("user") or {}).get("login"),
+        occurred_at=datetime.fromisoformat(comment["created_at"].replace("Z", "+00:00")),
+        extra={
+            "repo": repo_full_name,
+            "pr_number": pr_number,
+            "kind": "comment",
+            "path": path,
+        },
+    )
+
+
 def normalize_commit(commit: dict[str, Any], repo_full_name: str) -> NormalizedItem:
     commit_data = commit["commit"]
     git_author = commit_data.get("author") or {}

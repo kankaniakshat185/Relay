@@ -10,6 +10,7 @@ from relay_api.features.archaeology.schemas import (
     ArchaeologyRequest,
     ArchaeologyResponse,
     DirectoryEntry,
+    FileSearchMatch,
     RepoOption,
 )
 
@@ -34,6 +35,15 @@ async def browse(
     return await service.browse(db, current_user, owner, repo, path)
 
 
+@router.get("/search", response_model=list[FileSearchMatch])
+async def search(
+    q: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FileSearchMatch]:
+    return await service.search_files(db, current_user, q)
+
+
 @router.post("/trace", response_model=ArchaeologyResponse)
 async def trace(
     request: ArchaeologyRequest,
@@ -41,5 +51,11 @@ async def trace(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ArchaeologyResponse:
     return await service.trace(
-        db, current_user, owner=request.owner, repo=request.repo, ref=request.ref, path=request.path
+        db,
+        current_user,
+        owner=request.owner,
+        repo=request.repo,
+        ref=request.ref,
+        path=request.path,
+        target_type=request.target_type,
     )

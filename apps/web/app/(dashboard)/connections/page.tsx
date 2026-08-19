@@ -48,7 +48,7 @@ export default function ConnectionsPage() {
       <DisplayHeading size="xl" className="text-ink mt-3">
         Data access
       </DisplayHeading>
-      <p className="text-muted mt-4 max-w-md text-sm leading-relaxed">
+      <p className="text-muted mt-6 max-w-md text-sm leading-relaxed">
         Separate from signing in — each connection here grants Relay read-only access to build
         the context engine. Revocable independently, any time.
       </p>

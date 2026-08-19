@@ -43,13 +43,13 @@
 
 ## What got cut or simplified within this phase
 
-- **Single-file granularity only, not whole-module aggregation.** plan.md
-  says "given a file/module" for Who Should I Ask; this phase only
-  implements the file case. Aggregating blame across every file in a
-  directory is one GraphQL call per file — real latency cost for a large
-  directory, not built now. Both features' repo browser already supports
-  navigating to any directory; only the final rank/trace step is
-  file-scoped. Documented in ADR 0010, not silent.
+- ~~Single-file granularity only, not whole-module aggregation~~ — done,
+  as a follow-up shortly after this phase shipped: see ADR 0011. Both
+  features now accept a directory (via a new "Analyze this folder" action
+  in the repo picker), aggregating blame across every file inside it
+  (capped, concurrent, tolerant of individual file failures) and
+  deduping by commit across files so a PR touching several files in the
+  module still produces one timeline entry / one touch, not several.
 - **No new database schema.** Blame and directory browsing are always
   live GitHub calls, never ingested — the nice consequence of the "live,
   not ingested" decision is this entire phase needed zero Alembic
@@ -140,8 +140,7 @@ actual unblock; every 8-hour expiry after that refreshes silently now.
 
 ## Open items carried forward
 
-- Whole-module (directory-level) aggregation for Who Should I Ask — real
-  scope, not built, see above.
+- ~~Whole-module (directory-level) aggregation~~ — done, see ADR 0011.
 - Ticket-key extraction false positives — acceptable for now, would need
   real NLP or a Jira API cross-check (does this key actually exist in the
   user's connected site?) to fully close.
@@ -153,3 +152,47 @@ actual unblock; every 8-hour expiry after that refreshes silently now.
   `bad_refresh_token` on its very first use is still unexplained — the
   request matched GitHub's documented format exactly. Not investigated
   further since reconnecting is a one-time, low-cost recovery either way.
+
+## Addendum: Who Should I Ask's missing Slack/Jira correlation
+
+plan.md's spec for this feature says experts are surfaced "via git
+blame/PR history + Slack discussion recency" — this phase shipped
+git-only. Not a documented scope cut; a real gap, only noticed later when
+asked directly whether Slack/Jira were used anywhere besides Archaeology.
+
+Closed via ADR 0012: the ticket-key-extraction/Jira-URL/Slack-search logic
+that had lived privately inside `features/archaeology/service.py` moved
+into a shared `engine/correlation/` module (the ADR 0005 "two features
+need it, so it belongs in engine" case, now literally true), and
+`features/who_to_ask` was extended to use it — one Jira/Slack lookup per
+ranked person (not per commit, since commit lists are now uncapped and
+directory mode can span hundreds of files; see the ADR for the cost
+reasoning). A small N+1 fix rode along: the Jira credential is now
+fetched once per request in both features instead of once per
+commit/person.
+
+## Addendum: reviewers were invisible to Who Should I Ask
+
+A second real gap in the same spirit as the one above, named directly
+while comparing Relay against a broader "engineering context graph"
+concept: `features/who_to_ask` only ever ranked *commit authors* — anyone
+who reviewed a PR touching the file/directory, but never committed to it
+themselves, never appeared in the ranking at all, even though they're
+often exactly who you'd want to ask.
+
+Closed via ADR 0016, as the third of three sequenced builds (similar past
+Jira issues → ticket/PR-first entry point → this): PR review data
+(top-level verdicts and inline comments) is now ingested as a new
+`"review_comment"` source_type, capped to the 10 most-recently-updated
+PRs per repo (`_REVIEW_FETCH_LIMIT`). `engine.ranking.schemas.Touch` — its
+own docstring already anticipated this exact case — needed zero changes:
+a reviewer's commentary becomes an additional `Touch`, so
+`rank_by_recency`/`rank_by_frequency` rank them correctly for free.
+`PersonScore` gained a `reviews` field kept separate from `commits`, so a
+review-only contributor shows up honestly (`commits == []`, `reviews`
+non-empty) rather than being folded into a field that implies commit
+authorship. Archaeology also gained the same review data —
+`CommitEntry.review_comments` plus an "unresolved concerns" heuristic
+(most recent review verdict is CHANGES_REQUESTED with no later APPROVED)
+— deepening its existing "why does this exist" story, not just closing
+the ranking gap.

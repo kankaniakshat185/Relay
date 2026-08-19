@@ -77,3 +77,87 @@ async def list_directory_contents(
         # a file rather than a directory — callers only browse directories.
         entries: list[dict[str, Any]] = data if isinstance(data, list) else [data]
         return entries
+
+
+async def list_pr_reviews(
+    access_token: str, owner: str, repo: str, pr_number: int
+) -> list[dict[str, Any]]:
+    """Top-level review verdicts (APPROVED/CHANGES_REQUESTED/COMMENTED) on
+    one PR — used during ingestion, capped to the most-recently-updated
+    PRs per repo (`connectors/github/ingest.py`'s `_REVIEW_FETCH_LIMIT`,
+    see ADR 0016)."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        reviews: list[dict[str, Any]] = response.json()
+        return reviews
+
+
+async def list_pr_review_comments(
+    access_token: str, owner: str, repo: str, pr_number: int
+) -> list[dict[str, Any]]:
+    """Inline code comments on one PR — has `path`/`line`, unlike the
+    top-level reviews above. Same ingestion cap applies."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/pulls/{pr_number}/comments",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        comments: list[dict[str, Any]] = response.json()
+        return comments
+
+
+async def get_commit(access_token: str, owner: str, repo: str, sha: str) -> dict[str, Any]:
+    """Single commit, including a `files` array — unlike
+    `list_recent_commits` (used for ingestion, which deliberately omits
+    diffs/files, see ADR 0010), this endpoint returns exactly which files
+    the commit touched. Used live, on demand, by the ticket/PR-first
+    search entry point (ADR 0015) — never during ingestion itself."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/commits/{sha}",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        return data
+
+
+async def list_pull_request_files(
+    access_token: str, owner: str, repo: str, pr_number: int
+) -> list[dict[str, Any]]:
+    """Files changed by one PR — same "resolve on demand, not during
+    ingestion" reasoning as `get_commit` above."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/pulls/{pr_number}/files",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        files: list[dict[str, Any]] = response.json()
+        return files
+
+
+async def get_tree_recursive(access_token: str, owner: str, repo: str, ref: str) -> dict[str, Any]:
+    """Every blob/tree in the whole repo at `ref`, in one call — used for
+    whole-directory blame aggregation (`engine/code_context`), where
+    walking subdirectories one at a time via `list_directory_contents`
+    would mean one REST call per nested folder. `ref` accepts a branch
+    name directly, same as `graphql_client.get_blame`'s `ref` param.
+
+    Returns the raw response dict (`{"tree": [...], "truncated": bool}`)
+    — callers check `truncated` themselves, since what "too large" means
+    depends on what they're about to do with the result."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/git/trees/{ref}",
+            headers=_headers(access_token),
+            params={"recursive": "1"},
+        )
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        return data

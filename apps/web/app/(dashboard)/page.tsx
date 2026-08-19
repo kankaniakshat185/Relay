@@ -12,6 +12,8 @@ const FEATURES = [
   {
     n: "01",
     title: "Connections + Context Search",
+    description:
+      "Connect GitHub, Slack, and Jira, then ask a question — Relay retrieves and synthesizes a source-attributed answer across all three.",
     status: "live" as const,
     href: "/search",
     span: "md:col-span-7",
@@ -19,6 +21,8 @@ const FEATURES = [
   {
     n: "02",
     title: "Codebase Archaeology",
+    description:
+      "Pick a file. Relay traces its git blame back through each commit to the pull request that introduced it, the Jira ticket it closed, and the Slack discussion happening at the time.",
     status: "live" as const,
     href: "/archaeology",
     span: "md:col-span-5",
@@ -26,6 +30,8 @@ const FEATURES = [
   {
     n: "03",
     title: "Who Should I Ask",
+    description:
+      "Ranks everyone who's touched a file or directory by recency or frequency — including reviewers who never committed a line.",
     status: "live" as const,
     href: "/who-to-ask",
     span: "md:col-span-6",
@@ -33,6 +39,7 @@ const FEATURES = [
   {
     n: "04",
     title: "Flaky Test Investigator",
+    description: "Correlates CI failures against historical flakiness patterns and recent related PRs.",
     status: "upcoming" as const,
     href: null,
     span: "md:col-span-6",
@@ -40,6 +47,8 @@ const FEATURES = [
   {
     n: "05",
     title: "Dependency Alert Bot",
+    description:
+      "Watches dependency version bumps, parses changelogs, and cross-references against actual usage in the codebase.",
     status: "upcoming" as const,
     href: null,
     span: "md:col-span-12",
@@ -74,6 +83,7 @@ export default function DashboardHome() {
               <DisplayHeading as="h2" size="md" className="text-ink mt-4 max-w-sm">
                 {feature.title}
               </DisplayHeading>
+              <p className="text-muted mt-3 max-w-sm text-sm leading-relaxed">{feature.description}</p>
               <p
                 className={`mt-6 text-xs font-medium tracking-[0.2em] uppercase ${
                   feature.status === "live" ? "text-brand" : "text-muted"

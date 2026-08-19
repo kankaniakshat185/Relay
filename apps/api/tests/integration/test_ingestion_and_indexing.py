@@ -8,15 +8,32 @@ import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay_api.auth.models import User
 from relay_api.engine.indexing import service as indexing_service
+from relay_api.engine.indexing.embeddings import EmbeddingUnavailableError
 from relay_api.engine.ingestion import service as ingestion_service
-from relay_api.engine.ingestion.models import EMBEDDING_DIMENSIONS
+from relay_api.engine.ingestion.models import EMBEDDING_DIMENSIONS, IngestedItem
 from relay_api.engine.ingestion.schemas import NormalizedItem
 
 _FAKE_VECTOR = [0.1] * EMBEDDING_DIMENSIONS
+
+
+def _one_hot(dim: int) -> list[float]:
+    v = [0.0] * EMBEDDING_DIMENSIONS
+    v[dim] = 1.0
+    return v
+
+
+# Orthogonal one-hot vectors — cosine_distance between them is exactly 1
+# (vector_similarity 0), and identical to itself is exactly 0 (vector_similarity
+# 1), giving deterministic, easy-to-reason-about combined scores for the
+# min_score test below, unlike two arbitrary real embeddings.
+_CLOSE_VECTOR = _one_hot(0)
+_FAR_VECTOR = _one_hot(1)
 
 
 def _item(external_id: str, title: str = "Some PR") -> NormalizedItem:
@@ -92,3 +109,82 @@ async def test_search_is_scoped_to_the_requesting_user(db: AsyncSession, test_us
         results = await indexing_service.search(db, test_user.id, "item", limit=5)
 
     assert results == []
+
+
+async def test_a_later_chunk_failing_does_not_discard_an_earlier_chunk_already_committed(
+    db: AsyncSession, test_user: User
+) -> None:
+    """Regression test: `index_items` used to compute embeddings for its
+    *entire* input in one `embed_texts` call and only write to the DB
+    after that whole call succeeded — a failure partway through silently
+    discarded every embedding already computed before it, and since the
+    next indexing run re-fetches the same "needs indexing" set, a backlog
+    larger than one provider quota window could never shrink at all.
+    Found live when raising GitHub ingestion limits produced a 700+-item
+    backlog that outran Gemini's free-tier embedding quota."""
+    chunk_size = indexing_service._INDEX_CHUNK_SIZE
+    items = [_item(str(i), title=f"Item {i}") for i in range(chunk_size + 1)]
+    await ingestion_service.upsert_items(db, test_user.id, items)
+    to_index = await ingestion_service.get_items_needing_indexing(db, test_user.id)
+    assert len(to_index) == chunk_size + 1
+
+    # First chunk (chunk_size items) succeeds; the second chunk (the
+    # remaining 1 item) fails — simulating a rate limit hit partway
+    # through a backlog larger than one chunk.
+    call_count = 0
+
+    async def _fake_embed_texts(texts: list[str]) -> list[list[float]]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return [_FAKE_VECTOR for _ in texts]
+        raise EmbeddingUnavailableError("429 rate limited")
+
+    with (
+        patch.object(indexing_service, "embed_texts", new=_fake_embed_texts),
+        pytest.raises(EmbeddingUnavailableError),
+    ):
+        await indexing_service.index_items(db, to_index)
+
+    result = await db.execute(
+        select(IngestedItem)
+        .where(IngestedItem.user_id == test_user.id)
+        .order_by(IngestedItem.title)
+    )
+    by_title = {i.title: i for i in result.scalars().all()}
+    first_chunk_titles = {f"Item {i}" for i in range(chunk_size)}
+    last_item_title = f"Item {chunk_size}"
+
+    assert all(by_title[t].embedding is not None for t in first_chunk_titles)
+    assert by_title[last_item_title].embedding is None
+
+
+async def test_search_min_score_drops_weak_matches_kept_by_a_plain_limit(
+    db: AsyncSession, test_user: User
+) -> None:
+    """Regression test for the gap found live: with a small ingested
+    corpus, `search()`'s `ORDER BY score LIMIT N` always returns N results
+    regardless of relevance — "related Slack discussion" for a commit with
+    zero real Slack activity was showing whatever few messages existed,
+    just because they were "the top N," not because they were related.
+    `min_score` lets a caller (`engine.correlation`) assert a real floor."""
+    close_item = _item("close-1", title="Close match")
+    far_item = _item("far-1", title="Unrelated item")
+    await ingestion_service.upsert_items(db, test_user.id, [close_item, far_item])
+    to_index = await ingestion_service.get_items_needing_indexing(db, test_user.id)
+
+    async def _fake_embed(texts: list[str]) -> list[list[float]]:
+        # The query text ("query") and the "close" item's text both embed
+        # identically (cosine_distance 0); the "far" item embeds
+        # orthogonally (cosine_distance 1) — deterministic separation, not
+        # dependent on a real embedding model's actual behavior.
+        return [_FAR_VECTOR if "Unrelated item" in t else _CLOSE_VECTOR for t in texts]
+
+    with patch.object(indexing_service, "embed_texts", new=_fake_embed):
+        await indexing_service.index_items(db, to_index)
+
+        unfiltered = await indexing_service.search(db, test_user.id, "query", limit=10)
+        filtered = await indexing_service.search(db, test_user.id, "query", limit=10, min_score=0.4)
+
+    assert {i.title for i in unfiltered} == {"Close match", "Unrelated item"}
+    assert {i.title for i in filtered} == {"Close match"}

@@ -13,6 +13,7 @@ GitHub, made fresh on every request — there's nothing to ingest ahead of
 time (see the ADR for this phase).
 """
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -22,11 +23,30 @@ from relay_api.connectors.github import client, graphql_client
 from relay_api.engine.code_context.schemas import (
     AssociatedPullRequest,
     BlameRange,
+    DirectoryBlame,
     DirectoryEntry,
+    FileBlame,
     RepoSummary,
 )
 
 _REPO_LIMIT = 30
+
+# Bounds on whole-directory blame: a real GraphQL call per file, so both
+# numbers trade off latency against how complete an answer a large
+# directory gets — NOT a GitHub rate-limit concern. A single blame call
+# costs ~1 point against the 5,000-points/hour GraphQL budget (no
+# paginated connections beyond `first: 1` on the PR lookup), so even
+# `_MAX_FILES_PER_DIRECTORY = 500` only spends ~10% of that budget in one
+# request; `_BLAME_CONCURRENCY = 25` is still well under GitHub's
+# ~100-concurrent secondary-rate-limit guidance. ~20 sequential rounds
+# (500 / 25) is the real cost — measured in the single-digit seconds for
+# a typical repo (confirmed live at the 100-file setting before this was
+# raised), not a risk of hitting a wall. One slow/broken file can't take
+# the batch down either: `asyncio.gather(..., return_exceptions=True)`
+# below catches anything, including a raw timeout `get_blame` doesn't
+# itself wrap.
+_MAX_FILES_PER_DIRECTORY = 500
+_BLAME_CONCURRENCY = 25
 
 
 class CodeContextError(Exception):
@@ -71,6 +91,31 @@ async def list_directory(
         for entry in entries
         if entry["type"] in ("file", "dir")
     ]
+
+
+async def list_commit_files(access_token: str, owner: str, repo: str, sha: str) -> list[str]:
+    """Which files a single commit touched — ingestion never captured
+    this (ADR 0010: no diffs, no file paths), so the ticket/PR-first
+    search entry point (ADR 0015) resolves it live, only for the handful
+    of commits a search actually matched."""
+    try:
+        commit = await client.get_commit(access_token, owner, repo, sha)
+    except httpx.HTTPStatusError as exc:
+        raise CodeContextError(f"Could not fetch commit {owner}/{repo}@{sha}: {exc}") from exc
+
+    return [f["filename"] for f in commit.get("files", [])]
+
+
+async def list_pr_files(access_token: str, owner: str, repo: str, pr_number: int) -> list[str]:
+    """Same as `list_commit_files`, for a pull request."""
+    try:
+        files = await client.list_pull_request_files(access_token, owner, repo, pr_number)
+    except httpx.HTTPStatusError as exc:
+        raise CodeContextError(
+            f"Could not fetch files for {owner}/{repo}#{pr_number}: {exc}"
+        ) from exc
+
+    return [f["filename"] for f in files]
 
 
 def _to_blame_range(
@@ -120,3 +165,61 @@ async def get_blame(
         ranges.append(_to_blame_range(raw_range, pull_request))
 
     return ranges
+
+
+async def _list_files_under(
+    access_token: str, owner: str, repo: str, ref: str, path: str
+) -> list[str]:
+    """Every file (not directory) path under `path`, via one recursive
+    tree call rather than walking subdirectories one `list_directory`
+    call at a time. `path == ""` means the whole repo."""
+    try:
+        tree = await client.get_tree_recursive(access_token, owner, repo, ref)
+    except httpx.HTTPStatusError as exc:
+        raise CodeContextError(f"Could not list tree for {owner}/{repo}@{ref}: {exc}") from exc
+
+    if tree.get("truncated"):
+        raise CodeContextError(
+            f"{owner}/{repo} is too large to browse recursively — pick a more specific directory"
+        )
+
+    prefix = f"{path}/" if path else ""
+    return [
+        entry["path"]
+        for entry in tree.get("tree", [])
+        if entry["type"] == "blob" and entry["path"].startswith(prefix)
+    ]
+
+
+async def get_blame_for_directory(
+    access_token: str, owner: str, repo: str, ref: str, path: str
+) -> DirectoryBlame:
+    """Blames every file under `path`, concurrently and capped
+    (`_MAX_FILES_PER_DIRECTORY`, `_BLAME_CONCURRENCY`). A single file's
+    blame failing (binary, too large, deleted mid-request) doesn't fail
+    the whole directory — it's counted in `files_skipped` instead, same
+    "skip it, keep going, report it honestly" discipline as Slack's
+    per-channel indexing tolerance (Phase 1)."""
+    all_paths = await _list_files_under(access_token, owner, repo, ref, path)
+    files_total = len(all_paths)
+    capped_paths = all_paths[:_MAX_FILES_PER_DIRECTORY]
+
+    semaphore = asyncio.Semaphore(_BLAME_CONCURRENCY)
+
+    async def _blame_one(file_path: str) -> FileBlame:
+        async with semaphore:
+            ranges = await get_blame(access_token, owner, repo, ref, file_path)
+            return FileBlame(path=file_path, ranges=ranges)
+
+    results = await asyncio.gather(*(_blame_one(p) for p in capped_paths), return_exceptions=True)
+
+    files = [r for r in results if isinstance(r, FileBlame)]
+    files_analyzed = len(files)
+    files_skipped = files_total - files_analyzed
+
+    return DirectoryBlame(
+        files=files,
+        files_total=files_total,
+        files_analyzed=files_analyzed,
+        files_skipped=files_skipped,
+    )

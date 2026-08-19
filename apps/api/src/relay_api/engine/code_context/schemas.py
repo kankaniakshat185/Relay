@@ -42,3 +42,23 @@ class BlameRange:
     author_name: str | None
     author_login: str | None
     pull_request: AssociatedPullRequest | None = field(default=None)
+
+
+@dataclass(frozen=True)
+class FileBlame:
+    path: str
+    ranges: list[BlameRange]
+
+
+@dataclass(frozen=True)
+class DirectoryBlame:
+    """Result of blaming every file under a directory — see
+    `service.get_blame_for_directory`. `files_total` counts blob files
+    matched under the path before any cap or per-file failure; the gap
+    between it and `files_analyzed` (`files_skipped`) is meant to be shown
+    to the user, not hidden."""
+
+    files: list[FileBlame]
+    files_total: int
+    files_analyzed: int
+    files_skipped: int

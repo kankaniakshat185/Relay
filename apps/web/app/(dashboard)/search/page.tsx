@@ -73,7 +73,7 @@ export default function SearchPage() {
       <DisplayHeading size="xl" className="text-ink mt-3">
         Ask Relay
       </DisplayHeading>
-      <p className="text-muted mt-4 max-w-md text-sm leading-relaxed">
+      <p className="text-muted mt-6 max-w-md text-sm leading-relaxed">
         Searches your connected GitHub, Slack, and Jira activity and returns the relevant
         context directly — with an optional AI summary on top.
       </p>
