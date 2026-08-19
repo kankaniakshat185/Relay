@@ -3,6 +3,11 @@ const TONES = {
   brand: "text-brand",
   ink: "text-ink",
   paper: "text-paper-white/60",
+  /** For labels sitting on the footer's own `bg-ink text-paper` surface —
+   * theme-aware (`text-paper`, not the fixed `paper-white`), since that
+   * surface itself flips light/dark with the theme instead of staying a
+   * fixed island. */
+  inverse: "text-paper/60",
 } as const;
 
 interface SectionLabelProps {

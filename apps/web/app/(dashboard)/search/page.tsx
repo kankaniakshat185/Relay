@@ -164,7 +164,7 @@ export default function SearchPage() {
             type="submit"
             disabled={status === "loading"}
             aria-label="Search"
-            className="bg-brand text-paper-white hover:bg-ink flex h-10 w-10 shrink-0 items-center justify-center text-lg transition-colors disabled:opacity-50"
+            className="bg-brand text-paper-white hover:bg-ink hover:text-paper flex h-10 w-10 shrink-0 items-center justify-center text-lg transition-colors disabled:opacity-50"
           >
             {status === "loading" ? "…" : "↗"}
           </button>

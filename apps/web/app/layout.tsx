@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bodoni_Moda, Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +36,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${displaySerif.variable} h-full antialiased`}
     >
       <body className="bg-paper text-ink flex min-h-full flex-col">{children}</body>
+      {/* Runs before hydration so a stored theme choice applies before
+       * first paint — without this, a page load would briefly show the
+       * system-matched theme (from globals.css's `prefers-color-scheme`
+       * block) and then flash to the user's stored override. */}
+      <Script id="theme-init" strategy="beforeInteractive">
+        {`(function(){try{var t=localStorage.getItem("relay-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;}}catch(e){}})();`}
+      </Script>
     </html>
   );
 }

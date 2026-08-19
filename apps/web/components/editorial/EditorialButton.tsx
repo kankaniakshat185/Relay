@@ -10,7 +10,7 @@ const BASE =
 
 const VARIANTS = {
   default: "border-ink text-ink hover:bg-ink hover:text-paper",
-  brand: "border-brand bg-brand text-paper-white hover:border-ink hover:bg-ink",
+  brand: "border-brand bg-brand text-paper-white hover:border-ink hover:bg-ink hover:text-paper",
 } as const;
 
 function Arrow() {

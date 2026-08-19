@@ -2,6 +2,7 @@ import { DisplayHeading } from "@/components/editorial/DisplayHeading";
 import { LogoMark } from "@/components/editorial/LogoMark";
 import { RedPanel } from "@/components/editorial/RedPanel";
 import { SectionLabel } from "@/components/editorial/SectionLabel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { loginUrl } from "@/lib/api";
 
 const PROVIDERS = [
@@ -15,10 +16,13 @@ export default function LoginPage() {
     <div className="flex flex-1 flex-col">
       <div className="border-line flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
         <span className="flex items-center gap-2">
-          <LogoMark className="h-7 w-7" />
+          <LogoMark className="nav-logo-mark h-7 w-7" />
           <span className="font-serif text-ink text-3xl">Relay</span>
         </span>
-        <SectionLabel>Sign in</SectionLabel>
+        <div className="flex items-center gap-5">
+          <ThemeToggle />
+          <SectionLabel>Sign in</SectionLabel>
+        </div>
       </div>
 
       <div className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-x-10 gap-y-16 px-6 py-16 sm:px-10 md:grid-cols-12 md:items-center md:py-0">

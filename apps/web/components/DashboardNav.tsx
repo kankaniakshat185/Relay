@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { useCurrentUser } from "./AuthGuard";
 import { LogoMark } from "./editorial/LogoMark";
+import { ThemeToggle } from "./ThemeToggle";
 import { logout } from "@/lib/auth";
 
 const LIVE_ITEMS = [
@@ -26,7 +27,7 @@ export function DashboardNav() {
     <header className="border-line flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
       <div className="flex items-center gap-8">
         <Link href="/" className="flex items-center gap-2">
-          <LogoMark className="h-7 w-7" />
+          <LogoMark className="nav-logo-mark h-7 w-7" />
           <span className="font-serif text-ink text-3xl">Relay</span>
         </Link>
         <nav className="hidden items-center gap-6 sm:flex">
@@ -54,6 +55,7 @@ export function DashboardNav() {
       </div>
 
       <div className="flex items-center gap-5">
+        <ThemeToggle />
         <span className="text-muted hidden text-xs tracking-[0.1em] uppercase sm:inline">
           {user.display_name}
         </span>

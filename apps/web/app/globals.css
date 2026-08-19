@@ -4,6 +4,21 @@
  * Design tokens — editorial system. See docs/decisions/0003 (frontend
  * visual redesign) for the rationale. Do not scatter arbitrary colors or
  * spacing values in components — extend this file instead.
+ *
+ * Dark mode: the role tokens below (red/black/soft-black/off-white/muted/
+ * border) are redefined, same names, under `prefers-color-scheme: dark`
+ * and `[data-theme="dark"]` — components only ever reference the role
+ * (`text-ink`, `bg-paper`, etc.), never a literal color, so the whole app
+ * follows from these two blocks. Not a mechanical invert: a print-like
+ * editorial palette needs its own considered dark values, not
+ * `#faf9f6` and `#111111` swapped — see the actual hex choices below.
+ *
+ * `--relay-white` stays fixed (real, literal white) in both themes — it
+ * backs `--color-paper-white`, used for text sitting on a colored surface
+ * that doesn't itself flip with the theme (a red button, e.g.). The
+ * footer is the opposite case — it's `bg-ink text-paper`, deliberately
+ * theme-aware so it flips light-on-dark in dark mode instead of staying
+ * a fixed dark island; see `Footer.tsx` and `.footer-logo-mark` below.
  * ------------------------------------------------------------------- */
 :root {
   --relay-red: #e63323;
@@ -14,6 +29,34 @@
   --relay-white: #ffffff;
   --relay-muted: #8a8a8a;
   --relay-border: #d9d7d2;
+
+  --background: var(--relay-off-white);
+  --foreground: var(--relay-black);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --relay-red: #ef5c46;
+    --relay-red-dark: #ff8770;
+    --relay-black: #d8d3c9;
+    --relay-soft-black: #bfb8aa;
+    --relay-off-white: #1a1a19;
+    --relay-muted: #918a7f;
+    --relay-border: #302e2a;
+
+    --background: var(--relay-off-white);
+    --foreground: var(--relay-black);
+  }
+}
+
+:root[data-theme="dark"] {
+  --relay-red: #ef5c46;
+  --relay-red-dark: #ff8770;
+  --relay-black: #d8d3c9;
+  --relay-soft-black: #bfb8aa;
+  --relay-off-white: #1a1a19;
+  --relay-muted: #918a7f;
+  --relay-border: #302e2a;
 
   --background: var(--relay-off-white);
   --foreground: var(--relay-black);
@@ -54,4 +97,43 @@ input,
 button,
 a {
   border-radius: 0;
+}
+
+/* The footer's logo mark (Footer.tsx) sits on `bg-ink`, which is
+ * dark-on-light-page and light-on-dark-page — a plain "always invert"
+ * filter would go wrong in one of the two. Default (light mode): the
+ * footer is dark, so invert the naturally-near-black PNG to white.
+ * Dark mode: the footer flips light, so the PNG's natural near-black
+ * rendering already contrasts correctly — no filter needed. */
+.footer-logo-mark {
+  filter: brightness(0) invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .footer-logo-mark {
+    filter: none;
+  }
+}
+
+:root[data-theme="dark"] .footer-logo-mark {
+  filter: none;
+}
+
+/* The nav/login logo mark sits on the page's own `bg-paper`, which is
+ * light-on-light-mode and dark-on-dark-mode — the opposite situation
+ * from the footer above, so the filter is the mirror image: no filter by
+ * default (light mode, the PNG's natural near-black already contrasts),
+ * inverted to white only in dark mode (page background has gone dark). */
+.nav-logo-mark {
+  filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nav-logo-mark {
+    filter: brightness(0) invert(1);
+  }
+}
+
+:root[data-theme="dark"] .nav-logo-mark {
+  filter: brightness(0) invert(1);
 }

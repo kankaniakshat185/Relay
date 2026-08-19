@@ -44,25 +44,31 @@ const ELSEWHERE_ICONS = { github: GitHubMark, globe: GlobeMark };
 function FooterColumn({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <SectionLabel tone="paper">{label}</SectionLabel>
+      <SectionLabel tone="inverse">{label}</SectionLabel>
       <div className="mt-4 flex flex-col gap-2">{children}</div>
     </div>
   );
 }
 
 /** Editorial ending, not a generic SaaS footer — closes with a giant,
- * intentionally cropped wordmark. */
+ * intentionally cropped wordmark. Dark-on-light in light mode; in dark
+ * mode it flips to light-on-dark instead of staying a fixed dark island
+ * — the point of this section is contrast against the surrounding page,
+ * which means following the theme, not resisting it. Every color below
+ * is a theme-aware role token (`ink`/`paper`/`brand`), not `--color-
+ * paper-white` or Tailwind's own `white` — those are fixed, and would go
+ * invisible against this footer's own background once it flips. */
 export function Footer() {
   return (
-    <footer className="bg-ink text-paper-white mt-24">
+    <footer className="bg-ink text-paper mt-24">
       <div className="mx-auto max-w-[1600px] px-6 py-16 sm:px-10">
         <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4">
           <div className="col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2">
-              <LogoMark invert className="h-6 w-6" />
+              <LogoMark className="footer-logo-mark h-6 w-6" />
               <p className="font-serif text-2xl">Relay</p>
             </div>
-            <p className="text-paper-white/50 mt-2 text-xs leading-relaxed">
+            <p className="text-paper/50 mt-2 text-xs leading-relaxed">
               Correlates commits, discussions, and tickets into one answer — so the story behind a
               line of code doesn&apos;t live in someone&apos;s memory.
             </p>
@@ -70,7 +76,7 @@ export function Footer() {
 
           <FooterColumn label="Connections">
             {CONNECTIONS.map((source) => (
-              <span key={source} className="text-sm text-white/80">
+              <span key={source} className="text-paper/80 text-sm">
                 {source}
               </span>
             ))}
@@ -81,7 +87,7 @@ export function Footer() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-sm text-white/80 transition-colors hover:text-white"
+                className="text-paper/80 hover:text-paper text-sm transition-colors"
               >
                 {item.label}
               </Link>
@@ -97,7 +103,7 @@ export function Footer() {
                   href={item.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-white/80 transition-colors hover:text-white"
+                  className="text-paper/80 hover:text-paper flex items-center gap-2 text-sm transition-colors"
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   {item.label}
