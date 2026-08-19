@@ -11,11 +11,14 @@ from relay_api.connectors.slack import provider as slack_provider
 
 ALL_PROVIDERS: tuple[str, ...] = ("github", "slack", "jira")
 
-# Only Jira issues short-lived access tokens today — GitHub's classic OAuth
-# app and Slack's bot-install flow don't. Adding a fourth provider (or
-# switching GitHub to a GitHub App) means adding a `refresh_access_token`
-# to that provider module and one entry here, nothing else.
+# Slack's bot-install tokens don't expire, so it's the one provider absent
+# here. GitHub is refreshable even though its tokens *usually* don't
+# expire — whether they do depends on a per-OAuth-App owner setting
+# ("expire user authorization tokens"), found live in Phase 2 (see the
+# retro) — `ensure_valid_access_token` only ever calls this when
+# `expires_at` is actually set, so it's a no-op the rest of the time.
 _REFRESHABLE_PROVIDERS: dict[str, RefreshableConnectorProvider] = {
+    "github": github_provider,
     "jira": jira_provider,
 }
 

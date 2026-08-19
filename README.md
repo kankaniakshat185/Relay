@@ -13,7 +13,7 @@ things are the way they are.
 
 ## Status
 
-Phase 1 (Context Searcher vertical slice) — see [`plan.md` §5](plan.md#5-phases)
+Phase 2 (Archaeology + Who Should I Ask) — see [`plan.md` §5](plan.md#5-phases)
 for the phase plan. Login OAuth (GitHub/Slack/Google), connector OAuth
 (GitHub/Slack/Jira, read-only — GitHub covers PRs and commit messages),
 and the correlation engine (ingestion + hybrid keyword/vector indexing,
@@ -21,8 +21,11 @@ ADR 0006, embedding provider swappable to a free Gemini tier, ADR 0009)
 are wired end-to-end. The Context Searcher has two modes:
 raw retrieval (default, no LLM, always free) and an optional AI-summary
 mode across OpenAI/Groq/Anthropic/Gemini — BYOK, or a rate-limited OpenAI
-free tier (ADR 0007, ADR 0008). Archaeology and Who-Should-I-Ask (querying
-the same engine) land in Phase 2.
+free tier (ADR 0007, ADR 0008). Codebase Archaeology traces a file's git
+blame (live, via GitHub's GraphQL API — ADR 0010) through its originating
+PR, a linked Jira ticket, and related Slack discussion; Who Should I Ask
+ranks likely experts for a file by recency or frequency of touches
+(`engine/ranking`, differential-tested).
 
 ## Repo layout
 

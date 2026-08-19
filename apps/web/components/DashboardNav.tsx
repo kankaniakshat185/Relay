@@ -9,12 +9,12 @@ import { logout } from "@/lib/auth";
 
 const LIVE_ITEMS = [
   { label: "Search", href: "/search" },
+  { label: "Archaeology", href: "/archaeology" },
+  { label: "Who to Ask", href: "/who-to-ask" },
   { label: "Connections", href: "/connections" },
 ] as const;
 
 const UPCOMING_ITEMS = [
-  { label: "Archaeology", phase: 2 },
-  { label: "Who to Ask", phase: 2 },
   { label: "Flaky Tests", phase: 3 },
   { label: "Dependency Alerts", phase: 4 },
 ] as const;

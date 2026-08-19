@@ -2,5 +2,5 @@
 
 `features/*` query this package and only this package; it never imports from
 `features/*`. Built out starting Phase 1 (ingestion, indexing) and Phase 2
-(ranking) — see plan.md §5.
+(ranking, code_context) — see plan.md §5.
 """

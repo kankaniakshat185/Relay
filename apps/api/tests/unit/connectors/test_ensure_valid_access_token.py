@@ -52,7 +52,11 @@ async def test_token_not_yet_near_expiry_passes_through_untouched() -> None:
 
 
 async def test_expired_token_for_a_non_refreshable_provider_passes_through_stale() -> None:
-    credential = _credential(provider="github", expires_at=datetime.now(UTC) - timedelta(seconds=1))
+    # Slack's bot-install tokens don't expire — the one provider with no
+    # `refresh_access_token` at all (GitHub is refreshable too now that
+    # its OAuth App's optional token-expiration setting turned out to
+    # matter in practice; see the Phase 2 retro).
+    credential = _credential(provider="slack", expires_at=datetime.now(UTC) - timedelta(seconds=1))
     db = MagicMock()
 
     token = await service.ensure_valid_access_token(db, credential)

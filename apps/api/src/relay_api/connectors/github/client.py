@@ -58,3 +58,22 @@ async def list_recent_commits(
         response.raise_for_status()
         commits: list[dict[str, Any]] = response.json()
         return commits
+
+
+async def list_directory_contents(
+    access_token: str, owner: str, repo: str, path: str = ""
+) -> list[dict[str, Any]]:
+    """Immediate children of `path` (files and subdirectories) — used for
+    live directory browsing (`engine/code_context`), not ingestion. `path`
+    is the empty string for the repo root, matching GitHub's own API."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/contents/{path}",
+            headers=_headers(access_token),
+        )
+        response.raise_for_status()
+        data = response.json()
+        # GitHub returns a single object (not a list) when `path` points at
+        # a file rather than a directory — callers only browse directories.
+        entries: list[dict[str, Any]] = data if isinstance(data, list) else [data]
+        return entries

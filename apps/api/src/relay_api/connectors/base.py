@@ -48,10 +48,20 @@ class RefreshedTokens:
 
 class RefreshableConnectorProvider(Protocol):
     """A second, optional protocol — not every provider needs it. Slack's
-    bot tokens don't expire under the classic install flow and GitHub's
-    classic OAuth app tokens are long-lived, so only providers that
-    actually issue short-lived access tokens implement this (Jira,
-    currently). `connectors/registry.get_refreshable_provider` is the
-    single place that knows which ones do."""
+    bot tokens don't expire under the classic install flow, so only
+    providers that actually issue short-lived access tokens implement
+    this (Jira; GitHub too, if the OAuth App owner has "expire user
+    authorization tokens" turned on — found live, see the Phase 2 retro).
+    `connectors/registry.get_refreshable_provider` is the single place
+    that knows which ones do."""
 
     async def refresh_access_token(self, refresh_token: str) -> RefreshedTokens: ...
+
+
+class RefreshGrantError(Exception):
+    """Raised by a provider's own `refresh_access_token` when the grant
+    itself is rejected. Providers signal this differently at the HTTP
+    level — Atlassian uses a real error status (`httpx.HTTPStatusError`
+    covers that case directly), GitHub returns 200 with an `error` field
+    in the body — so this is the one type `connectors/service.py` needs
+    to catch regardless of which provider it's refreshing."""

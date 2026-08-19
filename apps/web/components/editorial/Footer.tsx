@@ -5,9 +5,11 @@ import { SectionLabel } from "./SectionLabel";
 const SOURCES = ["GitHub", "Slack", "Jira"];
 const PRODUCT = [
   { label: "Search", href: "/search" },
+  { label: "Archaeology", href: "/archaeology" },
+  { label: "Who to Ask", href: "/who-to-ask" },
   { label: "Connections", href: "/connections" },
 ];
-const ROADMAP = ["Archaeology", "Who to Ask", "Flaky Tests", "Dependency Alerts"];
+const ROADMAP = ["Flaky Tests", "Dependency Alerts"];
 
 function FooterColumn({ label, children }: { label: string; children: React.ReactNode }) {
   return (

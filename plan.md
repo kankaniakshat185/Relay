@@ -196,7 +196,7 @@ These are intentionally left open rather than assumed. Flag before starting the 
 
 - Whether Neon branch-per-PR gets adopted later for integration testing (currently: Dockerized Postgres in CI, per your call) — revisit only if the Docker approach starts causing real friction.
 
-**Resolved since first draft:** license (MIT), repo visibility (public), API versioning (`/v1` prefix from the start), observability (Sentry + structured logging), embedding model / vector search (pgvector on Neon + OpenAI `text-embedding-3-small`, ADR 0006), context-search answer synthesis LLM (OpenAI, ADR 0007) — see §1 for details.
+**Resolved since first draft:** license (MIT), repo visibility (public), API versioning (`/v1` prefix from the start), observability (Sentry + structured logging), embedding model / vector search (pgvector on Neon + OpenAI `text-embedding-3-small`, ADR 0006), context-search answer synthesis LLM (OpenAI, ADR 0007) — see §1 for details. Phase 2: real git blame via GitHub's GraphQL API rather than simpler file-level commit history, and a browsable repo/file-tree picker rather than a free-text path input — both decided via direct questions back to the user (ADR 0010).
 
 ---
 

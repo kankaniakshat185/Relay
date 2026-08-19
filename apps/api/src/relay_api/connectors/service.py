@@ -9,7 +9,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from relay_api.connectors.base import ConnectorAccount
+from relay_api.connectors.base import ConnectorAccount, RefreshGrantError
 from relay_api.connectors.encryption import decrypt_token, encrypt_token
 from relay_api.connectors.models import ConnectorCredential
 from relay_api.connectors.registry import ALL_PROVIDERS, get_refreshable_provider
@@ -23,8 +23,24 @@ _REFRESH_BUFFER = timedelta(seconds=60)
 
 class TokenRefreshError(Exception):
     """Raised when a provider's refresh grant itself fails — e.g. the
-    refresh token was revoked or already consumed. Reconnecting via the
-    Connections page is the only recovery; see docs/phases/1-context-searcher.md."""
+    refresh token was revoked, already consumed, or (found live — see the
+    Phase 2 retro) simply rejected by the provider for reasons it doesn't
+    explain in detail. Reconnecting via the Connections page is the only
+    recovery; see docs/phases/1-context-searcher.md."""
+
+    def __init__(self, provider: str, reason: str) -> None:
+        self.provider = provider
+        super().__init__(f"{provider} token refresh failed: {reason}")
+
+
+class ConnectorNotConnectedError(Exception):
+    """Raised by `get_required_access_token` when a feature needs live
+    access to a provider the user hasn't connected. Feature routers map
+    this to a clean 400 ("connect GitHub first"), not a 500."""
+
+    def __init__(self, provider: str) -> None:
+        self.provider = provider
+        super().__init__(f"{provider} is not connected")
 
 
 async def get_credential(
@@ -120,9 +136,9 @@ async def ensure_valid_access_token(db: AsyncSession, credential: ConnectorCrede
             decrypt_token(credential.refresh_token_encrypted)
         )
     except httpx.HTTPStatusError as exc:
-        raise TokenRefreshError(
-            f"{credential.provider} token refresh failed: {exc.response.status_code}"
-        ) from exc
+        raise TokenRefreshError(credential.provider, str(exc.response.status_code)) from exc
+    except RefreshGrantError as exc:
+        raise TokenRefreshError(credential.provider, str(exc)) from exc
 
     credential.access_token_encrypted = encrypt_token(refreshed.access_token)
     if refreshed.refresh_token:
@@ -132,3 +148,16 @@ async def ensure_valid_access_token(db: AsyncSession, credential: ConnectorCrede
     await db.refresh(credential)
 
     return refreshed.access_token
+
+
+async def get_required_access_token(db: AsyncSession, user_id: uuid.UUID, provider: str) -> str:
+    """Combines `get_credential` + `ensure_valid_access_token` for the
+    common case of "a feature needs a live, valid token for this provider
+    right now" — `features/archaeology` and `features/who_to_ask` both use
+    this rather than duplicating the same credential lookup, matching how
+    `jobs/indexing.py` already resolves tokens through this module rather
+    than `engine/` reaching into connector internals itself."""
+    credential = await get_credential(db, user_id, provider)
+    if credential is None:
+        raise ConnectorNotConnectedError(provider)
+    return await ensure_valid_access_token(db, credential)
