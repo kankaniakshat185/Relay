@@ -19,7 +19,7 @@ import re
 import uuid
 from typing import Literal, cast
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from relay_api.connectors import service as connector_service
@@ -36,7 +36,7 @@ _TICKET_KEY_PATTERN = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _EXCERPT_LENGTH = 200
 _DEFAULT_RELATED_LIMIT = 3
 
-_MIN_RELEVANCE_SCORE = 0.4
+_MIN_RELEVANCE_SCORE = 0.48
 """Below this combined score (`engine.indexing.service.search`'s
 `0.4*keyword_rank + 0.6*vector_similarity`), a candidate is discarded
 rather than shown as "related" — found live: with a small ingested
@@ -47,10 +47,15 @@ zero actual Slack activity was showing 3 unrelated messages just because
 not guessed: genuine matches (an exact ticket-key hit) scored 0.58-0.66;
 the noise floor from vector similarity alone on short, topically
 unrelated business text (`keyword_rank == 0`, `vector_similarity` alone
-carrying the score) topped out at 0.38 even at its highest. 0.4 sits in
-the gap with margin on both sides — not a universal constant, revisit if
-real usage shows either false negatives (a real match scoring low) or
-this still letting weak matches through."""
+carrying the score) topped out at 0.384. 0.48 sits near the midpoint of
+that gap (0.384-0.579) rather than hugging the noise ceiling — biased
+toward showing less unrelated content, which is safe to do *because* of
+`_find_exact_ticket_key_matches` below: a genuine exact-key match no
+longer depends on clearing this bar at all, so raising it only cuts
+weaker semantic-only matches, never a confirmed real one. Not a universal
+constant, revisit if real usage shows either false negatives (a real,
+non-exact match that should've surfaced) or this still letting weak
+matches through."""
 
 
 def extract_ticket_key(*texts: str) -> str | None:
@@ -94,6 +99,32 @@ def _to_related_item(item: IngestedItem) -> RelatedItem:
     )
 
 
+async def _find_exact_ticket_key_matches(
+    db: AsyncSession, user_id: uuid.UUID, ticket_key: str, *, sources: list[str], limit: int
+) -> list[RelatedItem]:
+    """A literal substring match on the ticket key — bypasses
+    `_MIN_RELEVANCE_SCORE` (and `search()`'s hybrid scoring entirely)
+    because an exact mention is the single strongest relevance signal
+    available; it shouldn't be at the mercy of a blended score that could,
+    in principle, land it under the bar (a real keyword hit paired with
+    unusually weak vector similarity for that specific text pairing).
+    Also catches items that haven't been embedded yet (`search()` requires
+    `embedding IS NOT NULL`) — a fresh mention shouldn't be invisible just
+    because indexing hasn't caught up to it."""
+    pattern = f"%{ticket_key}%"
+    result = await db.execute(
+        select(IngestedItem)
+        .where(
+            IngestedItem.user_id == user_id,
+            IngestedItem.source.in_(sources),
+            or_(IngestedItem.title.ilike(pattern), IngestedItem.body.ilike(pattern)),
+        )
+        .order_by(IngestedItem.occurred_at.desc())
+        .limit(limit)
+    )
+    return [_to_related_item(item) for item in result.scalars().all()]
+
+
 async def find_related(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -106,13 +137,30 @@ async def find_related(
     I Ask use this scoped to `sources=["slack"]` for discussion related to
     a ticket, and `find_similar_jira_issues` below builds on it scoped to
     `["jira"]` for similar past issues. One retrieval path (Phase 1's
-    hybrid search), two callers, not two implementations."""
+    hybrid search), two callers, not two implementations.
+
+    When `query` is itself exactly a ticket key (not free text like a PR
+    title, and not the longer title+body query `find_similar_jira_issues`
+    builds — `fullmatch`, not `search`, is deliberate here), exact
+    substring matches are unioned in ahead of the threshold-filtered
+    semantic results, guaranteed, capped at `limit` — see
+    `_find_exact_ticket_key_matches`."""
     if not query:
         return []
+
     items = await engine_search(
         db, user_id, query, sources=sources, limit=limit, min_score=_MIN_RELEVANCE_SCORE
     )
-    return [_to_related_item(item) for item in items]
+    related = [_to_related_item(item) for item in items]
+
+    if _TICKET_KEY_PATTERN.fullmatch(query):
+        exact_matches = await _find_exact_ticket_key_matches(
+            db, user_id, query, sources=sources, limit=limit
+        )
+        seen_urls = {m.url for m in exact_matches}
+        related = exact_matches + [r for r in related if r.url not in seen_urls]
+
+    return related[:limit]
 
 
 async def find_similar_jira_issues(

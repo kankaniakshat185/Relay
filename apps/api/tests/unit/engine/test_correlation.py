@@ -69,6 +69,19 @@ async def test_get_jira_site_url_strips_trailing_slash() -> None:
     assert site_url == "https://acme.atlassian.net"
 
 
+def _empty_execute_db() -> MagicMock:
+    """A `db.execute(...).scalars().all()` chain returning no rows — for
+    tests where `find_related`'s exact-match lookup fires (query looks
+    like a ticket key) but isn't the thing under test."""
+    scalars_result = MagicMock()
+    scalars_result.all.return_value = []
+    execute_result = MagicMock()
+    execute_result.scalars.return_value = scalars_result
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=execute_result)
+    return db
+
+
 async def test_find_related_returns_empty_list_for_no_query() -> None:
     with patch.object(service, "engine_search", new=AsyncMock(return_value=[])) as mock_search:
         result = await service.find_related(object(), uuid.uuid4(), None, sources=["slack"])
@@ -90,7 +103,9 @@ async def test_find_related_shapes_and_truncates_excerpt() -> None:
         occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     with patch.object(service, "engine_search", new=AsyncMock(return_value=[item])):
-        result = await service.find_related(object(), uuid.uuid4(), "REL-42", sources=["slack"])
+        result = await service.find_related(
+            _empty_execute_db(), uuid.uuid4(), "REL-42", sources=["slack"]
+        )
 
     assert len(result) == 1
     assert result[0].source == "slack"
@@ -100,7 +115,9 @@ async def test_find_related_shapes_and_truncates_excerpt() -> None:
 
 async def test_find_related_passes_query_sources_and_limit_through() -> None:
     with patch.object(service, "engine_search", new=AsyncMock(return_value=[])) as mock_search:
-        await service.find_related(object(), uuid.uuid4(), "REL-42", sources=["jira"], limit=5)
+        await service.find_related(
+            _empty_execute_db(), uuid.uuid4(), "REL-42", sources=["jira"], limit=5
+        )
 
     mock_search.assert_awaited_once()
     args = mock_search.call_args
@@ -112,11 +129,86 @@ async def test_find_related_passes_query_sources_and_limit_through() -> None:
 async def test_find_related_asserts_a_minimum_relevance_score() -> None:
     # Regression test: without this, "related" results always show the
     # top N by score even when nothing actually matches — see
-    # `_MIN_RELEVANCE_SCORE`'s docstring for the real data behind 0.4.
+    # `_MIN_RELEVANCE_SCORE`'s docstring for the real data behind it.
     with patch.object(service, "engine_search", new=AsyncMock(return_value=[])) as mock_search:
-        await service.find_related(object(), uuid.uuid4(), "REL-42", sources=["slack"])
+        await service.find_related(_empty_execute_db(), uuid.uuid4(), "REL-42", sources=["slack"])
 
     assert mock_search.call_args.kwargs["min_score"] == service._MIN_RELEVANCE_SCORE
+
+
+def _db_returning(items: list[IngestedItem]) -> MagicMock:
+    scalars_result = MagicMock()
+    scalars_result.all.return_value = items
+    execute_result = MagicMock()
+    execute_result.scalars.return_value = scalars_result
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=execute_result)
+    return db
+
+
+async def test_find_related_unions_an_exact_ticket_key_match_ahead_of_semantic_results() -> None:
+    # The exact match wasn't returned by the (mocked, threshold-filtered)
+    # semantic search at all — simulating the real gap: a genuine keyword
+    # hit that the blended score alone could have excluded.
+    semantic_hit = IngestedItem(
+        source="slack",
+        source_type="message",
+        external_id="msg-semantic",
+        title="Semantically related",
+        body="discussion of a similar problem",
+        url="https://acme.slack.com/archives/C1/p1",
+        author="alice",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    exact_hit = IngestedItem(
+        source="slack",
+        source_type="message",
+        external_id="msg-exact",
+        title="any updates on REL-42?",
+        body="any updates on REL-42?",
+        url="https://acme.slack.com/archives/C1/p2",
+        author="bob",
+        occurred_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+    with patch.object(service, "engine_search", new=AsyncMock(return_value=[semantic_hit])):
+        result = await service.find_related(
+            _db_returning([exact_hit]), uuid.uuid4(), "REL-42", sources=["slack"]
+        )
+
+    # Exact match first — the strongest signal shouldn't be buried behind
+    # (or excluded by) the general relevance score.
+    assert [r.url for r in result] == [exact_hit.url, semantic_hit.url]
+
+
+async def test_find_related_dedupes_an_exact_match_already_in_the_semantic_results() -> None:
+    item = IngestedItem(
+        source="slack",
+        source_type="message",
+        external_id="msg-1",
+        title="REL-42 discussion",
+        body="REL-42 discussion",
+        url="https://acme.slack.com/archives/C1/p1",
+        author="alice",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    with patch.object(service, "engine_search", new=AsyncMock(return_value=[item])):
+        result = await service.find_related(
+            _db_returning([item]), uuid.uuid4(), "REL-42", sources=["slack"]
+        )
+
+    assert len(result) == 1
+
+
+async def test_find_related_skips_the_exact_match_lookup_for_free_text_queries() -> None:
+    # A PR title, not a bare ticket key — `fullmatch` shouldn't fire, so
+    # the exact-match DB query should never run.
+    db = _empty_execute_db()
+    with patch.object(service, "engine_search", new=AsyncMock(return_value=[])):
+        await service.find_related(db, uuid.uuid4(), "REL-99 handle timeout", sources=["slack"])
+
+    db.execute.assert_not_awaited()
 
 
 def _jira_item(external_id: str, key: str, title: str, body: str) -> IngestedItem:
