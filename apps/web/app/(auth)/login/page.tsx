@@ -29,10 +29,10 @@ export default function LoginPage() {
         <div className="md:col-span-7">
           <SectionLabel tone="brand">Relay / Context Engine</SectionLabel>
           <p className="text-muted mt-4 max-w-sm text-sm leading-relaxed">
-            A shared context engine across GitHub, Slack, and Jira — one retrieval engine,
-            queried three different ways.
+            Correlates commits, discussions, and tickets into one answer — so the story behind a
+            line of code doesn&apos;t live in someone&apos;s memory.
           </p>
-          <DisplayHeading size="hero" className="text-ink -ml-1 mt-2">
+          <DisplayHeading size="hero" className="text-ink -ml-1 mt-4">
             Relay
           </DisplayHeading>
         </div>

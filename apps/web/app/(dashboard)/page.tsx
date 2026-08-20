@@ -33,7 +33,7 @@ const FEATURES = [
       "Ranks everyone who's touched a file, directory, or pull request by recency or frequency — including reviewers who never committed a line.",
     status: "live" as const,
     href: "/who-to-ask",
-    span: "md:col-span-6",
+    span: "md:col-span-5",
   },
   {
     n: "04",
@@ -42,7 +42,7 @@ const FEATURES = [
       "Tracks each workflow's pass/fail history and flags what looks flaky rather than genuinely broken — a same-commit re-run succeeding is the clearest sign.",
     status: "live" as const,
     href: "/flaky-tests",
-    span: "md:col-span-6",
+    span: "md:col-span-7",
   },
   {
     n: "05",
@@ -51,7 +51,7 @@ const FEATURES = [
       "Freeform, or annotated onto a specific commit, PR, ticket, or Slack message — indexed the same way as everything else, so they surface in Search too.",
     status: "live" as const,
     href: "/notes",
-    span: "md:col-span-6",
+    span: "md:col-span-7",
   },
   {
     n: "06",
@@ -60,7 +60,7 @@ const FEATURES = [
       "A time window instead of a query — everything across GitHub, Slack, Jira, and Notes in the last N days, synthesized into what shipped, what's still being discussed, and what's unresolved.",
     status: "live" as const,
     href: "/weekly-digest",
-    span: "md:col-span-6",
+    span: "md:col-span-5",
   },
 ];
 

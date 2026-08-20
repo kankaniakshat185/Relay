@@ -8,6 +8,9 @@ const PRODUCT = [
   { label: "Search", href: "/search" },
   { label: "Archaeology", href: "/archaeology" },
   { label: "Who to Ask", href: "/who-to-ask" },
+  { label: "Flaky Tests", href: "/flaky-tests" },
+  { label: "Notes", href: "/notes" },
+  { label: "Weekly Digest", href: "/weekly-digest" },
   { label: "Connections", href: "/connections" },
 ];
 const ELSEWHERE = [
