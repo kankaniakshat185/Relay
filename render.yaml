@@ -69,9 +69,8 @@ services:
       --app-dir apps/api/src --host 0.0.0.0 --port $PORT
     preDeployCommand: uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head
     healthCheckPath: /healthz
-    envVarGroups:
-      - relay-shared
     envVars:
+      - fromGroup: relay-shared
       - key: ENV
         value: production
       # Both blank on first sync — see the setup notes above.
@@ -111,9 +110,8 @@ services:
     startCommand: >-
       uv run --package relay-api celery -A relay_api.jobs.celery_app
       worker -B --loglevel=info
-    envVarGroups:
-      - relay-shared
     envVars:
+      - fromGroup: relay-shared
       - key: ENV
         value: production
       - key: REDIS_URL
