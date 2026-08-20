@@ -16,6 +16,17 @@ from relay_api.auth.providers import LoginProvider, NormalizedIdentity
 from relay_api.core.config import get_settings
 
 
+class OAuthExchangeError(Exception):
+    """The provider's own token endpoint reported a failure — GitHub's
+    classic OAuth token endpoint in particular returns HTTP 200 even on
+    failure (`{"error": ..., "error_description": ...}` in the body
+    instead of `access_token`), so `raise_for_status()` alone never
+    catches it; found live as a raw 500/`KeyError: 'access_token'` with
+    the actual reason (a stale client secret, a reused/expired code, a
+    redirect_uri mismatch at the exchange step specifically) silently
+    discarded. The router turns this into a clean 400, not a 500."""
+
+
 def build_authorization_url(provider: LoginProvider, redirect_uri: str) -> tuple[str, str]:
     """Returns (authorization_url, state). Caller is responsible for
     persisting `state` (e.g. in a short-lived signed cookie) and verifying
@@ -47,7 +58,11 @@ async def exchange_code_for_identity(
             headers={"Accept": "application/json"},
         )
         token_response.raise_for_status()
-        access_token = token_response.json()["access_token"]
+        token_data = token_response.json()
+        if "error" in token_data:
+            reason = token_data.get("error_description") or token_data["error"]
+            raise OAuthExchangeError(f"{provider.name} token exchange failed: {reason}")
+        access_token = token_data["access_token"]
 
         userinfo_response = await client.get(
             provider.userinfo_url,

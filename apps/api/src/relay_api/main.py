@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from relay_api.auth.router import router as auth_router
+from relay_api.auth.service import OAuthExchangeError
 from relay_api.connectors.router import router as connectors_router
 from relay_api.connectors.service import ConnectorNotConnectedError, TokenRefreshError
 from relay_api.core.config import get_settings
@@ -109,6 +110,22 @@ def create_app() -> FastAPI:
                 "detail": f"Your {exc.provider.capitalize()} connection needs to be refreshed — "
                 "reconnect it on the Connections page."
             },
+        )
+
+    @app.exception_handler(OAuthExchangeError)
+    async def oauth_exchange_error_handler(
+        _request: Request, exc: OAuthExchangeError
+    ) -> JSONResponse:
+        # Found live: GitHub's classic OAuth token endpoint returns HTTP
+        # 200 even on failure (an `error` field in the body, not
+        # `access_token`), so this used to surface as a raw 500 with the
+        # real reason (stale client secret, reused/expired code, etc.)
+        # silently swallowed by an unhandled KeyError. Logged with the
+        # real reason; the client gets a clean 400, not a stack trace.
+        logger.warning("oauth_exchange_error", extra={"error": str(exc)})
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Sign-in failed — the provider rejected the request. Try again."},
         )
 
     @app.exception_handler(CodeContextError)

@@ -28,14 +28,29 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    fetchCurrentUser().then((result) => {
-      if (cancelled) return;
-      if (result === null) {
+    fetchCurrentUser()
+      .then((result) => {
+        if (cancelled) return;
+        if (result === null) {
+          router.replace("/login");
+        } else {
+          setUser(result);
+        }
+      })
+      .catch((err: unknown) => {
+        // A clean "not logged in" (401) already resolves to `null` above,
+        // never throws — this only catches the unexpected case (a network
+        // failure, a CORS rejection, the API being unreachable). Treating
+        // it the same as "not authenticated" means a real backend problem
+        // sends the user to a working login page instead of leaving this
+        // screen stuck on "Checking session…" forever, which is what an
+        // unhandled rejection here used to do (found live: a CORS
+        // misconfiguration between a freshly deployed frontend/backend
+        // pair surfaced as an infinite spinner, not a visible error).
+        if (cancelled) return;
+        console.error(err);
         router.replace("/login");
-      } else {
-        setUser(result);
-      }
-    });
+      });
 
     return () => {
       cancelled = true;
