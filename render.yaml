@@ -64,10 +64,14 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install uv && uv sync --frozen --no-dev
+    # `preDeployCommand` needs a paid plan — not available on free tier.
+    # Chained into startCommand instead: `alembic upgrade head` is a safe
+    # no-op once already at head, so running it on every boot (not just
+    # real deploys) is fine, just not as clean as a real pre-deploy step.
     startCommand: >-
+      uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head &&
       uv run --package relay-api uvicorn relay_api.main:app
       --app-dir apps/api/src --host 0.0.0.0 --port $PORT
-    preDeployCommand: uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head
     healthCheckPath: /healthz
     envVars:
       - fromGroup: relay-shared
