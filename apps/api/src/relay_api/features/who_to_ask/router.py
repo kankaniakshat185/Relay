@@ -59,4 +59,5 @@ async def rank(
         path=request.path,
         strategy=request.strategy,
         target_type=request.target_type,
+        pr_number=request.pr_number,
     )

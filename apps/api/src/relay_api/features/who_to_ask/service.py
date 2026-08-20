@@ -4,10 +4,15 @@ purpose (ADR 0010/0011) — and the actual "who's most worth asking"
 question is answered by `engine.ranking`'s two differential-tested
 strategies, not decided here.
 
-Works on a single file or a whole directory (`target_type`) — directory
-mode pools every matched file's blame ranges before deduping by commit,
-so a commit that touched 3 files in the module still counts as exactly
-one touch for its author, not three (see ADR 0011).
+Works on a single file, a whole directory, or a pull request
+(`target_type`) — directory and pull-request mode both pool every
+matched file's blame ranges before deduping by commit, so a commit that
+touched 3 files still counts as exactly one touch for its author, not
+three (see ADR 0011). Pull-request mode ("PR Blast Radius") is the same
+pooling operation as directory mode, just fed by a PR's changed-files
+list (`engine.code_context.get_blame_for_pull_request`) instead of a
+directory tree walk — everything downstream of the blame ranges
+(dedup, ranking, correlation, reviewer ranking) is unchanged either way.
 
 Each ranked person also gets a Jira ticket link and related Slack
 discussion, via the same `engine.correlation` module Archaeology uses
@@ -112,7 +117,8 @@ async def rank(
     ref: str,
     path: str,
     strategy: RankingStrategy,
-    target_type: Literal["file", "directory"] = "file",
+    target_type: Literal["file", "directory", "pull_request"] = "file",
+    pr_number: int | None = None,
 ) -> WhoToAskResponse:
     token = await connector_service.get_required_access_token(db, user.id, "github")
 
@@ -121,15 +127,23 @@ async def rank(
         files_total = files_analyzed = 1
         files_skipped = 0
     else:
-        directory_blame = await code_context_service.get_blame_for_directory(
-            token, owner, repo, ref, path
-        )
+        if target_type == "pull_request":
+            if pr_number is None:
+                raise ValueError("pr_number is required when target_type is 'pull_request'")
+            multi_file_blame = await code_context_service.get_blame_for_pull_request(
+                token, owner, repo, ref, pr_number
+            )
+        else:
+            multi_file_blame = await code_context_service.get_blame_for_directory(
+                token, owner, repo, ref, path
+            )
         # Flatten, then dedupe by commit sha across every file — a commit
-        # touching 3 files in the directory is still one touch, not three.
-        blame_ranges = [r for file_blame in directory_blame.files for r in file_blame.ranges]
-        files_total = directory_blame.files_total
-        files_analyzed = directory_blame.files_analyzed
-        files_skipped = directory_blame.files_skipped
+        # touching 3 files (in the directory, or in the PR) is still one
+        # touch, not three.
+        blame_ranges = [r for file_blame in multi_file_blame.files for r in file_blame.ranges]
+        files_total = multi_file_blame.files_total
+        files_analyzed = multi_file_blame.files_analyzed
+        files_skipped = multi_file_blame.files_skipped
 
     commits = _distinct_commits(blame_ranges)
 

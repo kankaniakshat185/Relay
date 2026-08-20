@@ -52,9 +52,13 @@ class FileBlame:
 
 @dataclass(frozen=True)
 class DirectoryBlame:
-    """Result of blaming every file under a directory — see
-    `service.get_blame_for_directory`. `files_total` counts blob files
-    matched under the path before any cap or per-file failure; the gap
+    """Result of blaming an explicit set of files — a directory's
+    contents (`service.get_blame_for_directory`) or a pull request's
+    changed files (`service.get_blame_for_pull_request`); both resolve to
+    a plain path list and share the same concurrent-blame-with-skip
+    machinery (`service._blame_paths`), so this shape is generic over
+    either source, not directory-specific despite the name. `files_total`
+    counts the paths resolved before any cap or per-file failure; the gap
     between it and `files_analyzed` (`files_skipped`) is meant to be shown
     to the user, not hidden."""
 

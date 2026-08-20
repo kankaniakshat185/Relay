@@ -357,3 +357,68 @@ async def test_get_blame_for_directory_caps_at_max_files() -> None:
     assert result.files_total == service._MAX_FILES_PER_DIRECTORY + 10
     assert result.files_analyzed == service._MAX_FILES_PER_DIRECTORY
     assert result.files_skipped == 10
+
+
+# --- get_blame_for_pull_request (PR Blast Radius) — same _blame_paths
+# machinery as directory mode above, just fed by a PR's changed-files
+# list instead of a tree walk. ---
+
+
+async def test_get_blame_for_pull_request_resolves_files_via_the_pr_files_endpoint() -> None:
+    raw_files = [{"filename": "a.py"}, {"filename": "b.py"}]
+    with (
+        patch(
+            "relay_api.engine.code_context.service.client.list_pull_request_files",
+            new=AsyncMock(return_value=raw_files),
+        ),
+        patch.object(
+            service,
+            "get_blame",
+            new=AsyncMock(side_effect=lambda _t, _o, _r, _ref, path: _blame_result(f"sha-{path}")),
+        ),
+    ):
+        result = await service.get_blame_for_pull_request("token", "acme", "widgets", "main", 42)
+
+    assert result.files_total == 2
+    assert result.files_analyzed == 2
+    assert result.files_skipped == 0
+    assert {f.path for f in result.files} == {"a.py", "b.py"}
+
+
+async def test_get_blame_for_pull_request_tolerates_one_failing_file() -> None:
+    raw_files = [{"filename": "good.py"}, {"filename": "binary.png"}]
+
+    async def _fake_get_blame(_token, _owner, _repo, _ref, path):
+        if path == "binary.png":
+            raise service.CodeContextError("no blame data — binary file")
+        return _blame_result("sha-good")
+
+    with (
+        patch(
+            "relay_api.engine.code_context.service.client.list_pull_request_files",
+            new=AsyncMock(return_value=raw_files),
+        ),
+        patch.object(service, "get_blame", new=AsyncMock(side_effect=_fake_get_blame)),
+    ):
+        result = await service.get_blame_for_pull_request("token", "acme", "widgets", "main", 42)
+
+    assert result.files_total == 2
+    assert result.files_analyzed == 1
+    assert result.files_skipped == 1
+    assert [f.path for f in result.files] == ["good.py"]
+
+
+async def test_get_blame_for_pull_request_wraps_http_errors_resolving_files() -> None:
+    request = httpx.Request("GET", "https://api.github.com/repos/acme/widgets/pulls/42/files")
+    with (
+        patch(
+            "relay_api.engine.code_context.service.client.list_pull_request_files",
+            new=AsyncMock(
+                side_effect=httpx.HTTPStatusError(
+                    "not found", request=request, response=httpx.Response(404, request=request)
+                )
+            ),
+        ),
+        pytest.raises(service.CodeContextError),
+    ):
+        await service.get_blame_for_pull_request("stale-token", "acme", "widgets", "main", 999)

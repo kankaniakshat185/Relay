@@ -191,18 +191,20 @@ async def _list_files_under(
     ]
 
 
-async def get_blame_for_directory(
-    access_token: str, owner: str, repo: str, ref: str, path: str
+async def _blame_paths(
+    access_token: str, owner: str, repo: str, ref: str, paths: list[str]
 ) -> DirectoryBlame:
-    """Blames every file under `path`, concurrently and capped
-    (`_MAX_FILES_PER_DIRECTORY`, `_BLAME_CONCURRENCY`). A single file's
-    blame failing (binary, too large, deleted mid-request) doesn't fail
-    the whole directory — it's counted in `files_skipped` instead, same
-    "skip it, keep going, report it honestly" discipline as Slack's
-    per-channel indexing tolerance (Phase 1)."""
-    all_paths = await _list_files_under(access_token, owner, repo, ref, path)
-    files_total = len(all_paths)
-    capped_paths = all_paths[:_MAX_FILES_PER_DIRECTORY]
+    """Blames an explicit list of paths, concurrently and capped
+    (`_MAX_FILES_PER_DIRECTORY`, `_BLAME_CONCURRENCY`) — shared by
+    `get_blame_for_directory` (paths resolved from a tree walk) and
+    `get_blame_for_pull_request` (paths resolved from the PR's changed-
+    files list). A single file's blame failing (binary, too large,
+    deleted mid-request) doesn't fail the whole batch — it's counted in
+    `files_skipped` instead, same "skip it, keep going, report it
+    honestly" discipline as Slack's per-channel indexing tolerance
+    (Phase 1)."""
+    files_total = len(paths)
+    capped_paths = paths[:_MAX_FILES_PER_DIRECTORY]
 
     semaphore = asyncio.Semaphore(_BLAME_CONCURRENCY)
 
@@ -223,3 +225,27 @@ async def get_blame_for_directory(
         files_analyzed=files_analyzed,
         files_skipped=files_skipped,
     )
+
+
+async def get_blame_for_directory(
+    access_token: str, owner: str, repo: str, ref: str, path: str
+) -> DirectoryBlame:
+    """Blames every file under `path` — see `_blame_paths` for the
+    concurrency/skip mechanics shared with `get_blame_for_pull_request`."""
+    all_paths = await _list_files_under(access_token, owner, repo, ref, path)
+    return await _blame_paths(access_token, owner, repo, ref, all_paths)
+
+
+async def get_blame_for_pull_request(
+    access_token: str, owner: str, repo: str, ref: str, pr_number: int
+) -> DirectoryBlame:
+    """Blames every file a pull request changed — "who else has touched
+    this PR's blast radius" (`features/who_to_ask`'s `pull_request`
+    target type). Resolves the file list via the already-existing
+    `list_pr_files` (same live GitHub call the ticket/PR-first search
+    entry point uses, ADR 0015) rather than a tree walk, then reuses the
+    exact same `_blame_paths` pooling/skip machinery as directory mode —
+    "who touched this PR's files" and "who touched this directory's
+    files" are the same operation once you have a path list."""
+    paths = await list_pr_files(access_token, owner, repo, pr_number)
+    return await _blame_paths(access_token, owner, repo, ref, paths)

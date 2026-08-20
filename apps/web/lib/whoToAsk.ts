@@ -60,7 +60,9 @@ export interface WhoToAskRequest {
   ref: string;
   path: string;
   strategy: RankingStrategy;
-  target_type: "file" | "directory";
+  target_type: "file" | "directory" | "pull_request";
+  /** Required when `target_type` is `"pull_request"`. */
+  pr_number?: number;
 }
 
 export async function rankWhoToAsk(request: WhoToAskRequest): Promise<WhoToAskResponse> {

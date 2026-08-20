@@ -11,6 +11,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import ANY, AsyncMock, patch
 
+import pytest
+
 from relay_api.auth.models import User
 from relay_api.engine.code_context.schemas import (
     AssociatedPullRequest,
@@ -271,6 +273,117 @@ async def test_file_mode_still_reports_one_of_one_files() -> None:
     assert result.files_total == 1
     assert result.files_analyzed == 1
     assert result.files_skipped == 0
+
+
+# --- PR Blast Radius (`target_type="pull_request"`) — same pooling as
+# directory mode, just resolved via `get_blame_for_pull_request` instead
+# of `get_blame_for_directory`. ---
+
+
+async def _rank_pull_request_with(directory_blame: DirectoryBlame, strategy: str = "frequency"):
+    with (
+        patch.object(
+            service.connector_service,
+            "get_required_access_token",
+            new=AsyncMock(return_value="tok"),
+        ),
+        patch.object(
+            service.code_context_service,
+            "get_blame_for_pull_request",
+            new=AsyncMock(return_value=directory_blame),
+        ) as mock_get_blame,
+        patch.object(
+            service.correlation_service, "get_jira_site_url", new=AsyncMock(return_value=None)
+        ),
+        patch.object(service.correlation_service, "find_related", new=AsyncMock(return_value=[])),
+        patch.object(
+            service.correlation_service, "find_similar_jira_issues", new=AsyncMock(return_value=[])
+        ),
+        patch.object(
+            service.correlation_service,
+            "find_review_comments_for_pr",
+            new=AsyncMock(return_value=[]),
+        ),
+    ):
+        result = await service.rank(
+            object(),
+            _USER,
+            owner="acme",
+            repo="widgets",
+            ref="main",
+            path="",
+            strategy=strategy,
+            target_type="pull_request",
+            pr_number=7,
+        )
+    return result, mock_get_blame
+
+
+async def test_pull_request_mode_counts_a_commit_touching_multiple_files_once() -> None:
+    directory_blame = DirectoryBlame(
+        files=[
+            FileBlame(path="src/payments/handler.py", ranges=[_blame_range("abc")]),
+            FileBlame(path="src/payments/refunds.py", ranges=[_blame_range("abc")]),
+        ],
+        files_total=2,
+        files_analyzed=2,
+        files_skipped=0,
+    )
+
+    result, _ = await _rank_pull_request_with(directory_blame)
+
+    assert len(result.people) == 1
+    assert result.people[0].touch_count == 1
+
+
+async def test_pull_request_mode_propagates_file_counts_to_response() -> None:
+    directory_blame = DirectoryBlame(
+        files=[FileBlame(path="a.py", ranges=[_blame_range("abc")])],
+        files_total=5,
+        files_analyzed=1,
+        files_skipped=4,
+    )
+
+    result, _ = await _rank_pull_request_with(directory_blame)
+
+    assert result.files_total == 5
+    assert result.files_analyzed == 1
+    assert result.files_skipped == 4
+
+
+async def test_pull_request_mode_calls_get_blame_for_pull_request_with_the_pr_number() -> None:
+    directory_blame = DirectoryBlame(
+        files=[FileBlame(path="a.py", ranges=[_blame_range("abc")])],
+        files_total=1,
+        files_analyzed=1,
+        files_skipped=0,
+    )
+
+    _, mock_get_blame = await _rank_pull_request_with(directory_blame)
+
+    mock_get_blame.assert_awaited_once_with("tok", "acme", "widgets", "main", 7)
+
+
+async def test_pull_request_mode_without_a_pr_number_raises_a_clear_error() -> None:
+    with (
+        patch.object(
+            service.connector_service,
+            "get_required_access_token",
+            new=AsyncMock(return_value="tok"),
+        ),
+        pytest.raises(ValueError, match="pr_number is required"),
+    ):
+        await service.rank(
+            object(),
+            _USER,
+            owner="acme",
+            repo="widgets",
+            ref="main",
+            path="",
+            strategy="frequency",
+            target_type="pull_request",
+            pr_number=None,
+        )
 
 
 # --- Jira/Slack correlation (ADR 0012) ---

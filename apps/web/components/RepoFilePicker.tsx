@@ -28,7 +28,13 @@ export interface RepoFileSelection {
   repo: string;
   ref: string;
   path: string;
-  targetType: "file" | "directory";
+  targetType: "file" | "directory" | "pull_request";
+  /** Only set (and only meaningful) when `targetType === "pull_request"`. */
+  prNumber?: number;
+  /** Presentational only — a human-readable label for what got selected,
+   * for callers that can't derive one from `path` alone (a pull request
+   * pools many files, so there's no single path to show as a heading). */
+  displayLabel?: string;
 }
 
 /** Repo list → breadcrumb directory browser → file select, built entirely
@@ -161,6 +167,26 @@ export function RepoFilePicker({
     });
   }
 
+  /** PR Blast Radius — pools every file the PR changed instead of
+   * picking just one. Same repo-lookup pattern as `selectSearchFile`
+   * above; `path` is meaningless in this mode (a PR pools many files),
+   * so `displayLabel` carries what to show as a heading instead. */
+  function selectSearchPullRequest(match: FileSearchMatch) {
+    if (repos === "loading" || match.pr_number === null) return;
+    const matchedRepo = repos.find((r) => r.full_name === match.repo);
+    if (!matchedRepo) return;
+    setSelectedPath(null);
+    onSelect({
+      owner: matchedRepo.owner,
+      repo: matchedRepo.name,
+      ref: matchedRepo.default_branch,
+      path: "",
+      targetType: "pull_request",
+      prNumber: match.pr_number,
+      displayLabel: `PR #${match.pr_number} — ${match.title}`,
+    });
+  }
+
   if (!repo) {
     return (
       <div>
@@ -203,22 +229,33 @@ export function RepoFilePicker({
                     {match.files.length === 0 ? (
                       <p className="text-muted mt-1.5 text-xs italic">No files resolved.</p>
                     ) : (
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {match.files.map((f) => (
+                      <>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {match.files.map((f) => (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => selectSearchFile(match, f)}
+                              className={`border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                                selectedPath === f
+                                  ? "border-brand text-brand"
+                                  : "border-line text-muted hover:border-brand hover:text-brand"
+                              }`}
+                            >
+                              {f}
+                            </button>
+                          ))}
+                        </div>
+                        {!featureLabel && match.kind === "pull_request" && match.pr_number !== null && (
                           <button
-                            key={f}
                             type="button"
-                            onClick={() => selectSearchFile(match, f)}
-                            className={`border px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                              selectedPath === f
-                                ? "border-brand text-brand"
-                                : "border-line text-muted hover:border-brand hover:text-brand"
-                            }`}
+                            onClick={() => selectSearchPullRequest(match)}
+                            className="border-brand text-brand hover:bg-brand hover:text-paper-white mt-2 border px-2 py-1 text-[11px] font-medium tracking-[0.1em] uppercase transition-colors"
                           >
-                            {f}
+                            Rank everyone for this PR →
                           </button>
-                        ))}
-                      </div>
+                        )}
+                      </>
                     )}
                   </li>
                 ))}

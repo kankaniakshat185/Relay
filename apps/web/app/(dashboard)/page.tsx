@@ -30,7 +30,7 @@ const FEATURES = [
     n: "03",
     title: "Who Should I Ask",
     description:
-      "Ranks everyone who's touched a file or directory by recency or frequency — including reviewers who never committed a line.",
+      "Ranks everyone who's touched a file, directory, or pull request by recency or frequency — including reviewers who never committed a line.",
     status: "live" as const,
     href: "/who-to-ask",
     span: "md:col-span-6",

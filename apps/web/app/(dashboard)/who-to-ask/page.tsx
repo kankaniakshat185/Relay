@@ -34,6 +34,7 @@ export default function WhoToAskPage() {
         ref: next.ref,
         path: next.path,
         target_type: next.targetType,
+        pr_number: next.prNumber,
         strategy: nextStrategy,
       });
       setResult(response);
@@ -63,8 +64,8 @@ export default function WhoToAskPage() {
         Find the right person
       </DisplayHeading>
       <p className="text-muted mt-6 max-w-md text-sm leading-relaxed">
-        Pick a file. Relay ranks everyone who&apos;s touched it — by how recently, or how often —
-        using its git blame history.
+        Pick a file, a directory, or a pull request. Relay ranks everyone who&apos;s touched it —
+        by how recently, or how often — using its git blame history.
       </p>
 
       <Rule className="mt-16" />
@@ -98,7 +99,9 @@ export default function WhoToAskPage() {
       </div>
 
       {status === "loading" && (
-        <p className="text-muted mt-12 text-sm">Ranking {selection?.path}…</p>
+        <p className="text-muted mt-12 text-sm">
+          Ranking {selection?.displayLabel || selection?.path}…
+        </p>
       )}
 
       {status === "error" && (
@@ -109,7 +112,9 @@ export default function WhoToAskPage() {
 
       {result && (
         <div className="mt-20">
-          <SectionLabel>{selection?.path || "Whole repository"}</SectionLabel>
+          <SectionLabel>
+            {selection?.displayLabel || selection?.path || "Whole repository"}
+          </SectionLabel>
           {result.files_total > 1 && (
             <p className="text-muted mt-2 text-xs">
               Analyzed {result.files_analyzed} of {result.files_total} files

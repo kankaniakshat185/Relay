@@ -17,6 +17,12 @@ export default function ArchaeologyPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
   async function handleSelect(next: RepoFileSelection) {
+    // "pull_request" (PR Blast Radius) is Who Should I Ask-only —
+    // RepoFilePicker never offers that button here (it's gated on
+    // `featureLabel`, which this page always passes), so this is just a
+    // type-narrowing safety net, not a real runtime path.
+    if (next.targetType === "pull_request") return;
+
     setSelection(next);
     setStatus("loading");
     setResult(null);

@@ -322,6 +322,75 @@ async def test_search_resolves_a_real_ingested_pull_request_to_its_changed_files
     assert matches[0]["files"] == ["src/retry.py"]
 
 
+async def test_rank_pull_request_mode_dedupes_a_commit_across_the_prs_changed_files(
+    client: AsyncClient, db: AsyncSession, test_user: User
+) -> None:
+    """PR Blast Radius — same dedup guarantee as directory mode
+    (`test_rank_directory_mode_dedupes_a_commit_across_files` above), fed
+    by `get_blame_for_pull_request` instead of `get_blame_for_directory`."""
+    await _connect_github(db, test_user)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    pr_blame = DirectoryBlame(
+        files=[
+            FileBlame(path="src/payments/handler.py", ranges=[_blame_range("abc", "carol", now)]),
+            FileBlame(path="src/payments/refunds.py", ranges=[_blame_range("abc", "carol", now)]),
+        ],
+        files_total=2,
+        files_analyzed=2,
+        files_skipped=0,
+    )
+
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    try:
+        with patch(
+            "relay_api.features.who_to_ask.service.code_context_service.get_blame_for_pull_request",
+            new=AsyncMock(return_value=pr_blame),
+        ) as mock_get_blame:
+            response = await client.post(
+                "/v1/who-to-ask/rank",
+                json={
+                    "owner": "acme",
+                    "repo": "widgets",
+                    "ref": "main",
+                    "path": "",
+                    "target_type": "pull_request",
+                    "pr_number": 7,
+                },
+            )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["files_total"] == 2
+    assert len(body["people"]) == 1
+    assert body["people"][0]["touch_count"] == 1
+    mock_get_blame.assert_awaited_once_with("gh-token", "acme", "widgets", "main", 7)
+
+
+async def test_rank_pull_request_mode_without_a_pr_number_is_a_clean_422(
+    client: AsyncClient, db: AsyncSession, test_user: User
+) -> None:
+    await _connect_github(db, test_user)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    try:
+        response = await client.post(
+            "/v1/who-to-ask/rank",
+            json={
+                "owner": "acme",
+                "repo": "widgets",
+                "ref": "main",
+                "path": "",
+                "target_type": "pull_request",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 422
+
+
 async def test_rank_surfaces_a_review_only_contributor(
     client: AsyncClient, db: AsyncSession, test_user: User
 ) -> None:

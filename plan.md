@@ -1,5 +1,5 @@
 # Relay — Master Plan
-
+okay lets do
 **Status:** Source of truth. This document does not change casually — if a decision here needs to be revisited, it gets its own ADR explaining why, rather than a silent edit here.
 
 **What Relay is:** A shared context engine that correlates data across GitHub, Slack, and Jira, exposed through multiple purpose-built query interfaces (context search, codebase archaeology, "who should I ask") plus two standalone subsystems (flaky test investigation, dependency breaking-change alerts). The core architectural bet is "one retrieval/correlation engine, several query modes" rather than building four disconnected integrations.

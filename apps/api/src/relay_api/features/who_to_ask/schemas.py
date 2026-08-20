@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 RankingStrategy = Literal["recency", "frequency"]
 
@@ -25,10 +25,26 @@ class WhoToAskRequest(BaseModel):
     ref: str
     path: str
     strategy: RankingStrategy = "recency"
-    target_type: Literal["file", "directory"] = "file"
+    target_type: Literal["file", "directory", "pull_request"] = "file"
     """`path` is a single file (existing behavior) or a directory — every
     file under it gets blamed and pooled into one set of touches before
-    ranking. Set by the picker, same as `features/archaeology`."""
+    ranking. Set by the picker, same as `features/archaeology`.
+
+    `"pull_request"` (PR Blast Radius) pools every file the PR at
+    `pr_number` changed instead — `path` is ignored in this mode (sent
+    empty by the picker), same pooling/dedup as directory mode, just fed
+    by a PR's changed-files list instead of a directory tree walk."""
+    pr_number: int | None = None
+    """Required when `target_type == "pull_request"`, ignored otherwise."""
+
+    @model_validator(mode="after")
+    def _pr_number_required_for_pull_request_mode(self) -> "WhoToAskRequest":
+        # A clean 422 via Pydantic's own validation, not a raw 500 out of
+        # `service.rank`'s own defensive check — same "reject bad input
+        # at the boundary" discipline as every other request schema here.
+        if self.target_type == "pull_request" and self.pr_number is None:
+            raise ValueError("pr_number is required when target_type is 'pull_request'")
+        return self
 
 
 class CommitSummary(BaseModel):
