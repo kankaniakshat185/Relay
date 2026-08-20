@@ -55,6 +55,7 @@ async def connect(provider_name: str, current_user: CurrentUser) -> Response:
     state = secrets.token_urlsafe(24)
     auth_url = provider.authorization_url(_redirect_uri(provider_name), state)
 
+    settings = get_settings()
     response = RedirectResponse(auth_url, status_code=status.HTTP_302_FOUND)
     # Bind state to the logged-in user: the cookie proves "this browser
     # started this flow", the user id suffix proves it's still the same
@@ -64,8 +65,10 @@ async def connect(provider_name: str, current_user: CurrentUser) -> Response:
         f"{state}:{current_user.id}",
         max_age=600,
         httponly=True,
-        secure=get_settings().is_production,
-        samesite="lax",
+        secure=settings.is_production,
+        # See `auth/router.py`'s matching comment — "none" once deployed
+        # (frontend/backend are genuinely different sites), "lax" locally.
+        samesite="none" if settings.is_production else "lax",
     )
     return response
 

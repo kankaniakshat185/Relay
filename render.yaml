@@ -1,0 +1,128 @@
+# Render Blueprint — backend web service, Celery worker, and Redis.
+# Database is Neon (external, not Render's own Postgres — see plan.md §1),
+# so there's no `type: pserv`/postgres service here.
+#
+# Render's Blueprint schema does evolve (e.g. the managed Redis service
+# type has been renamed before) — if `type: redis` below is rejected when
+# you first sync this Blueprint, check Render's current Blueprint spec
+# reference for the current name and swap it; everything else here should
+# still hold.
+#
+# First-time setup, after this Blueprint is synced in Render's dashboard:
+#   1. Every `sync: false` var below needs its real value pasted in once,
+#      in Render's dashboard — none of them are safe to commit.
+#   2. `API_BASE_URL`/`FRONTEND_URL` can only be filled in *after* the
+#      first deploy of `relay-api` and the Vercel frontend each have a
+#      real URL — chicken-and-egg on a brand new deploy, so leave them
+#      blank for the very first sync, then edit and redeploy once both
+#      real URLs exist.
+#   3. `preDeployCommand` runs Alembic against `DATABASE_URL` on every
+#      deploy — make sure that's pointed at Neon (with `CREATE EXTENSION
+#      vector;` already run there, ADR 0006) before the first deploy, not
+#      left blank.
+
+envVarGroups:
+  - name: relay-shared
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: SECRET_KEY
+        sync: false
+      - key: CONNECTOR_ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      # Connector (data-access) OAuth apps — needed by the worker too,
+      # for refreshing a stored access token mid-sync, not just by the
+      # web service's own OAuth callback routes.
+      - key: GITHUB_CONNECTOR_CLIENT_ID
+        sync: false
+      - key: GITHUB_CONNECTOR_CLIENT_SECRET
+        sync: false
+      - key: SLACK_CONNECTOR_CLIENT_ID
+        sync: false
+      - key: SLACK_CONNECTOR_CLIENT_SECRET
+        sync: false
+      - key: JIRA_CONNECTOR_CLIENT_ID
+        sync: false
+      - key: JIRA_CONNECTOR_CLIENT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      # Swap to "openai" once OpenAI billing is set up (ADR 0009) — Gemini
+      # is the free stand-in used during development.
+      - key: EMBEDDING_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+services:
+  - type: web
+    name: relay-api
+    runtime: python
+    plan: free
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: >-
+      uv run --package relay-api uvicorn relay_api.main:app
+      --app-dir apps/api/src --host 0.0.0.0 --port $PORT
+    preDeployCommand: uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head
+    healthCheckPath: /healthz
+    envVarGroups:
+      - relay-shared
+    envVars:
+      - key: ENV
+        value: production
+      # Both blank on first sync — see the setup notes above.
+      - key: API_BASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: relay-redis
+          property: connectionString
+      # Login OAuth apps (identity-only scopes, ADR 0003) — the web
+      # service handles these callbacks, the worker never does.
+      - key: GITHUB_LOGIN_CLIENT_ID
+        sync: false
+      - key: GITHUB_LOGIN_CLIENT_SECRET
+        sync: false
+      - key: SLACK_LOGIN_CLIENT_ID
+        sync: false
+      - key: SLACK_LOGIN_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_LOGIN_CLIENT_ID
+        sync: false
+      - key: GOOGLE_LOGIN_CLIENT_SECRET
+        sync: false
+
+  - type: worker
+    name: relay-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    # Combined worker+beat in one process — jobs/celery_app.py's own
+    # comment already calls this out as the right choice at this scale
+    # (a single free-tier instance), not something to split until there's
+    # more than one worker replica.
+    startCommand: >-
+      uv run --package relay-api celery -A relay_api.jobs.celery_app
+      worker -B --loglevel=info
+    envVarGroups:
+      - relay-shared
+    envVars:
+      - key: ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: relay-redis
+          property: connectionString
+
+  - type: redis
+    name: relay-redis
+    plan: free
+    ipAllowList: [] # no external access — only relay-api/relay-worker need it, both already on Render's internal network

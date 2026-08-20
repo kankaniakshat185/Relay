@@ -47,14 +47,23 @@ async def login(provider_name: str) -> Response:
 
     auth_url, state = build_authorization_url(provider, _redirect_uri(provider_name))
 
+    settings = get_settings()
     response = RedirectResponse(auth_url, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         _STATE_COOKIE,
         state,
         max_age=600,
         httponly=True,
-        secure=get_settings().is_production,
-        samesite="lax",
+        secure=settings.is_production,
+        # "none" once deployed (frontend and backend are genuinely
+        # different sites — Vercel vs. Render — so "lax" wouldn't survive
+        # the redirect back from the OAuth provider on some browsers'
+        # stricter interpretations of top-level-navigation exemptions);
+        # "lax" locally, where both are just different ports on
+        # `localhost` (same site) and `Secure` isn't available over plain
+        # HTTP. `SameSite=None` requires `Secure=True`, already true above
+        # exactly when this flips.
+        samesite="none" if settings.is_production else "lax",
     )
     return response
 
@@ -90,7 +99,11 @@ async def callback(
         max_age=settings.session_token_ttl_seconds,
         httponly=True,
         secure=settings.is_production,
-        samesite="lax",
+        # See the matching comment in `login()` above — this is the
+        # cookie `lib/api.ts`'s `apiFetch` (cross-site once deployed)
+        # actually depends on for every subsequent authenticated request,
+        # not just the redirect that sets it.
+        samesite="none" if settings.is_production else "lax",
     )
     return response
 
