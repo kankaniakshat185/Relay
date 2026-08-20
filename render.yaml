@@ -80,9 +80,16 @@ services:
     # backgrounded (`&` inside the subshell, which returns immediately) so
     # uvicorn — the process Render actually health-checks — ends up in the
     # foreground; see the top-of-file note on what this trades away.
+    # `--pool=solo` (no forking) instead of Celery's default `prefork`
+    # pool — found live: the default spawned 8 concurrent worker
+    # processes, each a full copy of the app, blowing well past the
+    # free tier's 512MB limit before uvicorn got a share. The jobs here
+    # are I/O-bound (waiting on GitHub/Slack/Jira API calls), not
+    # CPU-bound, so running them one at a time in a single process costs
+    # nothing functionally at this scale.
     startCommand: >-
       uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head &&
-      (uv run --package relay-api celery -A relay_api.jobs.celery_app worker -B --loglevel=info &) &&
+      (uv run --package relay-api celery -A relay_api.jobs.celery_app worker -B --loglevel=info --pool=solo &) &&
       uv run --package relay-api uvicorn relay_api.main:app
       --app-dir apps/api/src --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
