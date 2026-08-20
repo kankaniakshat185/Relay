@@ -7,8 +7,7 @@ question, a file, a pull request, or a time window; Relay traces the
 connections across every source you've connected and answers from there.
 
 **Live demo:** `https://therelay.vercel.app` — sign in
-with GitHub to try it (Slack/Google login and full Slack/Jira connection
-depend on which OAuth apps are configured on the deployment).
+with GitHub/Slack/Google to try it.
 
 See [`plan.md`](plan.md) for the full original architecture/phase plan,
 and [`docs/adr/`](docs/adr/) / [`docs/decisions/`](docs/decisions/) /
