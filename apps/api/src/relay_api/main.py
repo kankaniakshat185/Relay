@@ -23,6 +23,7 @@ from relay_api.features.archaeology.router import router as archaeology_router
 from relay_api.features.context_search.router import router as context_search_router
 from relay_api.features.flaky_tests.router import router as flaky_tests_router
 from relay_api.features.notes.router import router as notes_router
+from relay_api.features.weekly_digest.router import router as weekly_digest_router
 from relay_api.features.who_to_ask.router import router as who_to_ask_router
 
 settings = get_settings()
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     v1.include_router(who_to_ask_router)
     v1.include_router(flaky_tests_router)
     v1.include_router(notes_router)
+    v1.include_router(weekly_digest_router)
     app.include_router(v1)
 
     @app.get("/healthz", tags=["health"])

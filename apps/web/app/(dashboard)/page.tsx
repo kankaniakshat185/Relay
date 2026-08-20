@@ -55,11 +55,11 @@ const FEATURES = [
   },
   {
     n: "06",
-    title: "Dependency Alert Bot",
+    title: "Weekly Digest",
     description:
-      "Watches dependency version bumps, parses changelogs, and cross-references against actual usage in the codebase.",
-    status: "upcoming" as const,
-    href: null,
+      "A time window instead of a query — everything across GitHub, Slack, Jira, and Notes in the last N days, synthesized into what shipped, what's still being discussed, and what's unresolved.",
+    status: "live" as const,
+    href: "/weekly-digest",
     span: "md:col-span-6",
   },
 ];

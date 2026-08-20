@@ -67,23 +67,31 @@ export default function WhoToAskPage() {
         using its git blame history.
       </p>
 
-      <div className="mt-8 border-line flex w-fit border">
-        {(["recency", "frequency"] as const).map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={strategy === s}
-            onClick={() => handleStrategyChange(s)}
-            className={`px-4 py-2 text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
-              i === 1 ? "border-line border-l" : ""
-            } ${strategy === s ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
-          >
-            {s === "recency" ? "Recently active" : "Most involved"}
-          </button>
-        ))}
+      <Rule className="mt-16" />
+
+      {/* Same label + toggle shape as Search/Weekly Digest's own selectors. */}
+      <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <SectionLabel tone="brand" className="sm:w-16 sm:shrink-0">
+          Sort
+        </SectionLabel>
+        <div className="border-line flex w-full border sm:w-[420px]">
+          {(["recency", "frequency"] as const).map((s, i) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={strategy === s}
+              onClick={() => handleStrategyChange(s)}
+              className={`flex-1 px-4 py-2 text-center text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
+                i === 1 ? "border-line border-l" : ""
+              } ${strategy === s ? "bg-ink text-paper" : "text-muted hover:text-ink"}`}
+            >
+              {s === "recency" ? "Recently active" : "Most involved"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <Rule className="mt-8" />
+      <Rule className="mt-8 w-full lg:w-[60%]" />
 
       <div className="mt-8 w-full lg:w-[60%]">
         <RepoFilePicker basePath="/v1/who-to-ask" onSelect={handleSelect} />

@@ -1,29 +1,10 @@
 import { apiFetch } from "./api";
+import type { ItemCitation, LlmProvider, LlmUnavailableReason } from "./synthesis";
 
-export type LlmProvider = "openai" | "groq" | "anthropic" | "gemini";
+export type { LlmProvider, LlmUnavailableReason };
+export { LLM_PROVIDERS } from "./synthesis";
 
-export const LLM_PROVIDERS: { id: LlmProvider; label: string }[] = [
-  { id: "openai", label: "OpenAI" },
-  { id: "groq", label: "Groq" },
-  { id: "anthropic", label: "Anthropic" },
-  { id: "gemini", label: "Gemini" },
-];
-
-export interface SourceCitation {
-  source: "github" | "slack" | "jira" | "notes";
-  source_type: "pull_request" | "commit" | "message" | "issue" | "review_comment" | "note";
-  title: string;
-  url: string;
-  author: string | null;
-  occurred_at: string;
-  excerpt: string;
-}
-
-export type LlmUnavailableReason =
-  | "rate_limited"
-  | "api_key_required"
-  | "invalid_api_key"
-  | "provider_error";
+export type SourceCitation = ItemCitation;
 
 export interface ContextSearchResponse {
   used_llm: boolean;

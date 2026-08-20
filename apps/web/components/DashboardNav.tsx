@@ -14,10 +14,9 @@ const LIVE_ITEMS = [
   { label: "Who to Ask", href: "/who-to-ask" },
   { label: "Flaky Tests", href: "/flaky-tests" },
   { label: "Notes", href: "/notes" },
+  { label: "Weekly Digest", href: "/weekly-digest" },
   { label: "Connections", href: "/connections" },
 ] as const;
-
-const UPCOMING_ITEMS = [{ label: "Dependency Alerts", phase: 4 }] as const;
 
 export function DashboardNav() {
   const user = useCurrentUser();
@@ -42,15 +41,6 @@ export function DashboardNav() {
             >
               {item.label}
             </Link>
-          ))}
-          {UPCOMING_ITEMS.map((item) => (
-            <span
-              key={item.label}
-              title={`Ships in Phase ${item.phase}`}
-              className="text-line cursor-not-allowed text-xs font-medium tracking-[0.15em] uppercase"
-            >
-              {item.label}
-            </span>
           ))}
         </nav>
       </div>

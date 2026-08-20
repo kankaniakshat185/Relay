@@ -1,9 +1,13 @@
-from datetime import datetime
-from typing import Literal
-
 from pydantic import BaseModel
 
-LlmProvider = Literal["openai", "groq", "anthropic", "gemini"]
+from relay_api.engine.synthesis.schemas import ItemCitation, LlmProvider, LlmUnavailableReason
+
+__all__ = [
+    "ContextSearchRequest",
+    "ContextSearchResponse",
+    "LlmProvider",
+    "LlmUnavailableReason",
+]
 
 
 class ContextSearchRequest(BaseModel):
@@ -19,25 +23,10 @@ class ContextSearchRequest(BaseModel):
     tier is OpenAI-only regardless of llm_provider (see core/rate_limit.py)."""
 
 
-class SourceCitation(BaseModel):
-    source: str
-    source_type: str
-    title: str
-    url: str
-    author: str | None
-    occurred_at: datetime
-    excerpt: str
-
-
-LlmUnavailableReason = Literal[
-    "rate_limited", "api_key_required", "invalid_api_key", "provider_error"
-]
-
-
 class ContextSearchResponse(BaseModel):
     used_llm: bool
     """Whether an answer was actually synthesized. Sources are always
     populated regardless of this."""
     llm_unavailable_reason: LlmUnavailableReason | None = None
     answer: str | None = None
-    sources: list[SourceCitation]
+    sources: list[ItemCitation]

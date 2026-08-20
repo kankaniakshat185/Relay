@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { AnnotateLink } from "@/components/editorial/AnnotateLink";
 import { DisplayHeading } from "@/components/editorial/DisplayHeading";
+import { LlmProviderPicker } from "@/components/editorial/LlmProviderPicker";
 import { Metadata } from "@/components/editorial/Metadata";
 import { RedPanel } from "@/components/editorial/RedPanel";
 import { Rule } from "@/components/editorial/Rule";
@@ -14,9 +15,9 @@ import {
   type ContextSearchResponse,
   type LlmProvider,
   type SourceCitation,
-  LLM_PROVIDERS,
   runContextSearch,
 } from "@/lib/contextSearch";
+import { UNAVAILABLE_MESSAGES } from "@/lib/synthesis";
 
 const SOURCE_ORDER = ["github", "slack", "jira", "notes"] as const;
 const SOURCE_LABELS: Record<string, string> = {
@@ -24,14 +25,6 @@ const SOURCE_LABELS: Record<string, string> = {
   slack: "Slack",
   jira: "Jira",
   notes: "Notes",
-};
-
-const UNAVAILABLE_MESSAGES: Record<string, string> = {
-  rate_limited:
-    "Free tier limit reached for today — bring your own API key above, or try again tomorrow.",
-  api_key_required: "This provider has no free tier — add your own API key above to use it.",
-  invalid_api_key: "That API key was rejected — double-check it and try again.",
-  provider_error: "The provider had a hiccup — try again in a moment.",
 };
 
 function groupBySource(
@@ -83,82 +76,53 @@ export default function SearchPage() {
         context directly — with an optional AI summary on top.
       </p>
 
+      <Rule className="mt-16" />
+
       {/* Primary decision: what kind of answer. Stays the one thing with
           this visual weight — the provider/key row below is deliberately
-          quieter, see the collapsing container underneath. */}
-      <div className="mt-8 border-line flex w-fit border">
-        <button
-          type="button"
-          aria-pressed={!useLlm}
-          onClick={() => setUseLlm(false)}
-          className={`px-4 py-2 text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
-            !useLlm ? "bg-ink text-paper" : "text-muted hover:text-ink"
-          }`}
-        >
-          Raw
-        </button>
-        <button
-          type="button"
-          aria-pressed={useLlm}
-          onClick={() => setUseLlm(true)}
-          className={`border-line border-l px-4 py-2 text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
-            useLlm ? "bg-brand text-paper-white" : "text-muted hover:text-ink"
-          }`}
-        >
-          AI Summary
-        </button>
+          quieter, see the collapsing container underneath. Same "View"
+          label + toggle shape as Weekly Digest's own selector. */}
+      <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <SectionLabel tone="brand" className="sm:w-16 sm:shrink-0">
+          View
+        </SectionLabel>
+        <div className="border-line flex w-full border sm:w-[420px]">
+          <button
+            type="button"
+            aria-pressed={!useLlm}
+            onClick={() => setUseLlm(false)}
+            className={`flex-1 px-4 py-2 text-center text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
+              !useLlm ? "bg-ink text-paper" : "text-muted hover:text-ink"
+            }`}
+          >
+            Raw
+          </button>
+          <button
+            type="button"
+            aria-pressed={useLlm}
+            onClick={() => setUseLlm(true)}
+            className={`border-line border-l flex-1 px-4 py-2 text-center text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
+              useLlm ? "bg-ink text-paper" : "text-muted hover:text-ink"
+            }`}
+          >
+            AI Summary
+          </button>
+        </div>
       </div>
 
       {/* Secondary decision: which model. Quiet editorial metadata row,
           not a second segmented control — collapses to zero height (not
           just hidden) so raw mode stays exactly as clean as before. */}
-      <div
-        className={`overflow-hidden transition-all duration-200 ease-out ${
-          useLlm ? "mt-5 max-h-40 opacity-100" : "mt-0 max-h-0 opacity-0"
-        }`}
-      >
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <SectionLabel tone="brand">Model</SectionLabel>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {LLM_PROVIDERS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                aria-pressed={provider === p.id}
-                onClick={() => setProvider(p.id)}
-                className={`pb-0.5 text-sm font-medium transition-colors ${
-                  provider === p.id
-                    ? "decoration-brand text-ink underline decoration-2 underline-offset-4"
-                    : "text-muted hover:text-ink"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <LlmProviderPicker
+        visible={useLlm}
+        provider={provider}
+        onProviderChange={setProvider}
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+      />
 
-        <div className="mt-4 max-w-lg">
-          <label htmlFor="llm-api-key" className="sr-only">
-            API key for {LLM_PROVIDERS.find((p) => p.id === provider)?.label}
-          </label>
-          <input
-            id="llm-api-key"
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={
-              provider === "openai"
-                ? "Your OpenAI API key — optional, uses Relay's free tier if left blank"
-                : `Your ${LLM_PROVIDERS.find((p) => p.id === provider)?.label} API key — required, no free tier for this provider`
-            }
-            className="border-line focus:border-ink w-full border-b bg-transparent py-2 text-sm outline-none"
-          />
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="mt-8 md:grid md:grid-cols-12">
-        <div className="border-ink flex items-end gap-4 border-b pb-3 md:col-span-10">
+      <form onSubmit={handleSubmit} className="mt-8 w-full lg:w-[60%]">
+        <div className="border-ink flex items-end gap-4 border-b pb-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

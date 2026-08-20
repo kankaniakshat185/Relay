@@ -4,6 +4,7 @@ never touch the database directly (see `connectors/*/client.py`, which
 only talks to provider APIs)."""
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -74,6 +75,26 @@ async def get_items_needing_indexing(
     result = await db.execute(
         select(IngestedItem)
         .where(IngestedItem.user_id == user_id, IngestedItem.embedding.is_(None))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_items_since(
+    db: AsyncSession, user_id: uuid.UUID, since: datetime, limit: int = 60
+) -> list[IngestedItem]:
+    """Every item across every source that occurred on or after `since`,
+    most recent first — a time-window read, not a similarity search. Used
+    by `features/weekly_digest` (see its ADR): a genuinely different
+    retrieval mode over the same table `engine.indexing.service.search`
+    ranks by relevance, capped the same pragmatic way (an active user's
+    digest covers their most recent `limit` items in the window, not
+    literally everything — same "heuristic, not ground truth" posture as
+    everywhere else in this codebase)."""
+    result = await db.execute(
+        select(IngestedItem)
+        .where(IngestedItem.user_id == user_id, IngestedItem.occurred_at >= since)
+        .order_by(IngestedItem.occurred_at.desc())
         .limit(limit)
     )
     return list(result.scalars().all())

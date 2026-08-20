@@ -13,7 +13,7 @@ from anthropic import AuthenticationError as AnthropicAuthenticationError
 from anthropic import PermissionDeniedError as AnthropicPermissionDeniedError
 from google.genai import errors as genai_errors
 
-from relay_api.features.context_search import llm_providers as lp
+from relay_api.engine.synthesis import providers as lp
 
 _SYSTEM = "system prompt"
 _USER = "user prompt"

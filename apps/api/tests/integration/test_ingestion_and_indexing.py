@@ -5,7 +5,7 @@ mocked — this is testing the SQL, not the embedding model — but the actual
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -36,7 +36,11 @@ _CLOSE_VECTOR = _one_hot(0)
 _FAR_VECTOR = _one_hot(1)
 
 
-def _item(external_id: str, title: str = "Some PR") -> NormalizedItem:
+def _item(
+    external_id: str,
+    title: str = "Some PR",
+    occurred_at: datetime = datetime(2026, 1, 1, tzinfo=UTC),
+) -> NormalizedItem:
     return NormalizedItem(
         source="github",
         source_type="pull_request",
@@ -45,7 +49,7 @@ def _item(external_id: str, title: str = "Some PR") -> NormalizedItem:
         body="body text",
         url="https://github.com/acme/widgets/pull/1",
         author="octocat",
-        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+        occurred_at=occurred_at,
     )
 
 
@@ -188,3 +192,70 @@ async def test_search_min_score_drops_weak_matches_kept_by_a_plain_limit(
 
     assert {i.title for i in unfiltered} == {"Close match", "Unrelated item"}
     assert {i.title for i in filtered} == {"Close match"}
+
+
+async def test_get_items_since_only_returns_items_in_the_window(
+    db: AsyncSession, test_user: User
+) -> None:
+    recent = _item(
+        "recent-1", title="Inside the window", occurred_at=datetime.now(UTC) - timedelta(days=1)
+    )
+    stale = _item(
+        "stale-1", title="Outside the window", occurred_at=datetime.now(UTC) - timedelta(days=30)
+    )
+    await ingestion_service.upsert_items(db, test_user.id, [recent, stale])
+
+    results = await ingestion_service.get_items_since(
+        db, test_user.id, datetime.now(UTC) - timedelta(days=7)
+    )
+
+    assert {i.title for i in results} == {"Inside the window"}
+
+
+async def test_get_items_since_orders_most_recent_first(db: AsyncSession, test_user: User) -> None:
+    older = _item("older-1", title="Older item", occurred_at=datetime.now(UTC) - timedelta(days=3))
+    newer = _item("newer-1", title="Newer item", occurred_at=datetime.now(UTC) - timedelta(days=1))
+    await ingestion_service.upsert_items(db, test_user.id, [older, newer])
+
+    results = await ingestion_service.get_items_since(
+        db, test_user.id, datetime.now(UTC) - timedelta(days=7)
+    )
+
+    titles = [i.title for i in results if i.title in {"Older item", "Newer item"}]
+    assert titles == ["Newer item", "Older item"]
+
+
+async def test_get_items_since_is_scoped_to_the_requesting_user(
+    db: AsyncSession, test_user: User
+) -> None:
+    other_user = User(email=f"{uuid.uuid4()}@example.com", display_name="Other User")
+    db.add(other_user)
+    await db.commit()
+    await db.refresh(other_user)
+
+    item = _item(
+        "other-1",
+        title="Someone else's recent item",
+        occurred_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    await ingestion_service.upsert_items(db, other_user.id, [item])
+
+    results = await ingestion_service.get_items_since(
+        db, test_user.id, datetime.now(UTC) - timedelta(days=7)
+    )
+
+    assert all(i.title != "Someone else's recent item" for i in results)
+
+
+async def test_get_items_since_respects_the_limit(db: AsyncSession, test_user: User) -> None:
+    an_hour_ago = datetime.now(UTC) - timedelta(hours=1)
+    items = [
+        _item(f"limit-{i}", title=f"Limit item {i}", occurred_at=an_hour_ago) for i in range(5)
+    ]
+    await ingestion_service.upsert_items(db, test_user.id, items)
+
+    results = await ingestion_service.get_items_since(
+        db, test_user.id, datetime.now(UTC) - timedelta(days=7), limit=3
+    )
+
+    assert len(results) == 3
