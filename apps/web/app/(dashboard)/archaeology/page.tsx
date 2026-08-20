@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { RepoFilePicker, type RepoFileSelection } from "@/components/RepoFilePicker";
+import { AnnotateLink } from "@/components/editorial/AnnotateLink";
 import { DisplayHeading } from "@/components/editorial/DisplayHeading";
 import { Metadata } from "@/components/editorial/Metadata";
 import { Rule } from "@/components/editorial/Rule";
@@ -98,14 +99,17 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
         <Rule className="flex-1" />
       </div>
 
-      <a
-        href={commit.url}
-        target="_blank"
-        rel="noreferrer"
-        className="font-serif hover:text-brand mt-4 block max-w-2xl text-xl text-ink transition-colors sm:text-2xl"
-      >
-        {commit.message.split("\n")[0]}
-      </a>
+      <div className="mt-4 flex items-baseline justify-between gap-4">
+        <a
+          href={commit.url}
+          target="_blank"
+          rel="noreferrer"
+          className="font-serif hover:text-brand block max-w-2xl text-xl text-ink transition-colors sm:text-2xl"
+        >
+          {commit.message.split("\n")[0]}
+        </a>
+        <AnnotateLink source="github" url={commit.url} title={commit.message.split("\n")[0]} />
+      </div>
       <Metadata
         items={[
           commit.author,
@@ -137,7 +141,7 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
       {(commit.pull_request || commit.jira_ticket_key) && (
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
           {commit.pull_request && (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-3">
               <a
                 href={commit.pull_request.url}
                 target="_blank"
@@ -151,24 +155,38 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
                   Unresolved
                 </span>
               )}
+              <AnnotateLink
+                source="github"
+                url={commit.pull_request.url}
+                title={`PR #${commit.pull_request.number} — ${commit.pull_request.title}`}
+              />
             </span>
           )}
           {commit.jira_ticket_key && (
-            <p className="text-xs font-medium tracking-[0.15em] uppercase">
-              <span className="text-muted">Jira · </span>
-              {commit.jira_ticket_url ? (
-                <a
-                  href={commit.jira_ticket_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-brand transition-colors hover:underline"
-                >
-                  {commit.jira_ticket_key}
-                </a>
-              ) : (
-                <span className="text-brand">{commit.jira_ticket_key}</span>
+            <span className="flex items-center gap-3">
+              <p className="text-xs font-medium tracking-[0.15em] uppercase">
+                <span className="text-muted">Jira · </span>
+                {commit.jira_ticket_url ? (
+                  <a
+                    href={commit.jira_ticket_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand transition-colors hover:underline"
+                  >
+                    {commit.jira_ticket_key}
+                  </a>
+                ) : (
+                  <span className="text-brand">{commit.jira_ticket_key}</span>
+                )}
+              </p>
+              {commit.jira_ticket_url && (
+                <AnnotateLink
+                  source="jira"
+                  url={commit.jira_ticket_url}
+                  title={commit.jira_ticket_key}
+                />
               )}
-            </p>
+            </span>
           )}
         </div>
       )}
@@ -181,14 +199,17 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
           <ul className="border-line mt-2 flex flex-col gap-3 border-l pl-4">
             {commit.related_slack.map((msg) => (
               <li key={msg.url}>
-                <a
-                  href={msg.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm font-medium text-ink transition-colors"
-                >
-                  {msg.title}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={msg.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm font-medium text-ink transition-colors"
+                  >
+                    {msg.title}
+                  </a>
+                  <AnnotateLink source="slack" url={msg.url} title={msg.title} />
+                </div>
                 <p className="text-muted mt-1 text-xs leading-relaxed">{msg.excerpt}</p>
               </li>
             ))}
@@ -204,14 +225,17 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
           <ul className="border-line mt-2 flex flex-col gap-3 border-l pl-4">
             {commit.similar_issues.map((issue) => (
               <li key={issue.url}>
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm font-medium text-ink transition-colors"
-                >
-                  {issue.title}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={issue.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm font-medium text-ink transition-colors"
+                  >
+                    {issue.title}
+                  </a>
+                  <AnnotateLink source="jira" url={issue.url} title={issue.title} />
+                </div>
                 <p className="text-muted mt-1 text-xs leading-relaxed">{issue.excerpt}</p>
               </li>
             ))}
@@ -227,15 +251,22 @@ function CommitCard({ commit }: { commit: CommitEntry }) {
           <ul className="border-line mt-2 flex flex-col gap-3 border-l pl-4">
             {commit.review_comments.map((comment) => (
               <li key={comment.url}>
-                <a
-                  href={comment.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm font-medium text-ink transition-colors"
-                >
-                  {comment.author ?? "Unknown reviewer"}
-                  {comment.state ? ` · ${comment.state.replace("_", " ").toLowerCase()}` : ""}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={comment.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm font-medium text-ink transition-colors"
+                  >
+                    {comment.author ?? "Unknown reviewer"}
+                    {comment.state ? ` · ${comment.state.replace("_", " ").toLowerCase()}` : ""}
+                  </a>
+                  <AnnotateLink
+                    source="github"
+                    url={comment.url}
+                    title={comment.author ?? "Review comment"}
+                  />
+                </div>
                 <p className="text-muted mt-1 text-xs leading-relaxed">{comment.excerpt}</p>
               </li>
             ))}

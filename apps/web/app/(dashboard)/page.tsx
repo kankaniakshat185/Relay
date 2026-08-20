@@ -46,12 +46,21 @@ const FEATURES = [
   },
   {
     n: "05",
+    title: "Notes",
+    description:
+      "Freeform, or annotated onto a specific commit, PR, ticket, or Slack message — indexed the same way as everything else, so they surface in Search too.",
+    status: "live" as const,
+    href: "/notes",
+    span: "md:col-span-6",
+  },
+  {
+    n: "06",
     title: "Dependency Alert Bot",
     description:
       "Watches dependency version bumps, parses changelogs, and cross-references against actual usage in the codebase.",
     status: "upcoming" as const,
     href: null,
-    span: "md:col-span-12",
+    span: "md:col-span-6",
   },
 ];
 

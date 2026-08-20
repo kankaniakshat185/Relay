@@ -10,8 +10,8 @@ export const LLM_PROVIDERS: { id: LlmProvider; label: string }[] = [
 ];
 
 export interface SourceCitation {
-  source: "github" | "slack" | "jira";
-  source_type: "pull_request" | "commit" | "message" | "issue";
+  source: "github" | "slack" | "jira" | "notes";
+  source_type: "pull_request" | "commit" | "message" | "issue" | "review_comment" | "note";
   title: string;
   url: string;
   author: string | null;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { RepoFilePicker, type RepoFileSelection } from "@/components/RepoFilePicker";
+import { AnnotateLink } from "@/components/editorial/AnnotateLink";
 import { DisplayHeading } from "@/components/editorial/DisplayHeading";
 import { Metadata } from "@/components/editorial/Metadata";
 import { Rule } from "@/components/editorial/Rule";
@@ -163,21 +164,30 @@ function PersonCard({
       />
 
       {person.jira_ticket_key && (
-        <p className="mt-3 text-xs font-medium tracking-[0.15em] uppercase">
-          <span className="text-muted">Jira · </span>
-          {person.jira_ticket_url ? (
-            <a
-              href={person.jira_ticket_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-brand transition-colors hover:underline"
-            >
-              {person.jira_ticket_key}
-            </a>
-          ) : (
-            <span className="text-brand">{person.jira_ticket_key}</span>
+        <span className="mt-3 flex items-center gap-3">
+          <p className="text-xs font-medium tracking-[0.15em] uppercase">
+            <span className="text-muted">Jira · </span>
+            {person.jira_ticket_url ? (
+              <a
+                href={person.jira_ticket_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand transition-colors hover:underline"
+              >
+                {person.jira_ticket_key}
+              </a>
+            ) : (
+              <span className="text-brand">{person.jira_ticket_key}</span>
+            )}
+          </p>
+          {person.jira_ticket_url && (
+            <AnnotateLink
+              source="jira"
+              url={person.jira_ticket_url}
+              title={person.jira_ticket_key}
+            />
           )}
-        </p>
+        </span>
       )}
 
       {person.related_slack.length > 0 && (
@@ -188,14 +198,17 @@ function PersonCard({
           <ul className="border-line mt-2 flex flex-col gap-3 border-l pl-4">
             {person.related_slack.map((msg) => (
               <li key={msg.url}>
-                <a
-                  href={msg.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm font-medium text-ink transition-colors"
-                >
-                  {msg.title}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={msg.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm font-medium text-ink transition-colors"
+                  >
+                    {msg.title}
+                  </a>
+                  <AnnotateLink source="slack" url={msg.url} title={msg.title} />
+                </div>
                 <p className="text-muted mt-1 text-xs leading-relaxed">{msg.excerpt}</p>
               </li>
             ))}
@@ -211,14 +224,17 @@ function PersonCard({
           <ul className="border-line mt-2 flex flex-col gap-3 border-l pl-4">
             {person.similar_issues.map((issue) => (
               <li key={issue.url}>
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm font-medium text-ink transition-colors"
-                >
-                  {issue.title}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={issue.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm font-medium text-ink transition-colors"
+                  >
+                    {issue.title}
+                  </a>
+                  <AnnotateLink source="jira" url={issue.url} title={issue.title} />
+                </div>
                 <p className="text-muted mt-1 text-xs leading-relaxed">{issue.excerpt}</p>
               </li>
             ))}
@@ -234,14 +250,17 @@ function PersonCard({
           <ul className="border-line mt-2 flex flex-col gap-2 border-l pl-4">
             {visibleCommits.map((commit) => (
               <li key={commit.sha}>
-                <a
-                  href={commit.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm text-ink transition-colors"
-                >
-                  {commit.message}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={commit.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm text-ink transition-colors"
+                  >
+                    {commit.message}
+                  </a>
+                  <AnnotateLink source="github" url={commit.url} title={commit.message} />
+                </div>
                 <Metadata
                   items={[commit.short_sha, new Date(commit.committed_at).toLocaleDateString()]}
                   className="mt-0.5"
@@ -269,14 +288,21 @@ function PersonCard({
           <ul className="border-line mt-2 flex flex-col gap-2 border-l pl-4">
             {person.reviews.map((review, i) => (
               <li key={`${review.url}-${i}`}>
-                <a
-                  href={review.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-brand text-sm text-ink transition-colors"
-                >
-                  PR #{review.pr_number} — {review.pr_title}
-                </a>
+                <div className="flex items-baseline justify-between gap-4">
+                  <a
+                    href={review.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-brand text-sm text-ink transition-colors"
+                  >
+                    PR #{review.pr_number} — {review.pr_title}
+                  </a>
+                  <AnnotateLink
+                    source="github"
+                    url={review.url}
+                    title={`PR #${review.pr_number} — ${review.pr_title}`}
+                  />
+                </div>
                 <Metadata
                   items={[
                     review.state?.replace("_", " ").toLowerCase() ?? null,

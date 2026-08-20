@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
+import { AnnotateLink } from "@/components/editorial/AnnotateLink";
 import { DisplayHeading } from "@/components/editorial/DisplayHeading";
 import { Metadata } from "@/components/editorial/Metadata";
 import { RedPanel } from "@/components/editorial/RedPanel";
@@ -16,11 +18,12 @@ import {
   runContextSearch,
 } from "@/lib/contextSearch";
 
-const SOURCE_ORDER = ["github", "slack", "jira"] as const;
+const SOURCE_ORDER = ["github", "slack", "jira", "notes"] as const;
 const SOURCE_LABELS: Record<string, string> = {
   github: "GitHub",
   slack: "Slack",
   jira: "Jira",
+  notes: "Notes",
 };
 
 const UNAVAILABLE_MESSAGES: Record<string, string> = {
@@ -31,8 +34,10 @@ const UNAVAILABLE_MESSAGES: Record<string, string> = {
   provider_error: "The provider had a hiccup — try again in a moment.",
 };
 
-function groupBySource(sources: SourceCitation[]): [string, SourceCitation[]][] {
-  const groups = new Map<string, SourceCitation[]>();
+function groupBySource(
+  sources: SourceCitation[]
+): [SourceCitation["source"], SourceCitation[]][] {
+  const groups = new Map<SourceCitation["source"], SourceCitation[]>();
   for (const source of sources) {
     groups.set(source.source, [...(groups.get(source.source) ?? []), source]);
   }
@@ -217,14 +222,28 @@ export default function SearchPage() {
                 <ul className="mt-6 flex flex-col gap-6">
                   {items.map((item) => (
                     <li key={item.url}>
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="hover:text-brand text-base font-medium text-ink transition-colors"
-                      >
-                        {item.title}
-                      </a>
+                      <div className="flex items-baseline justify-between gap-4">
+                        {source === "notes" ? (
+                          <Link
+                            href={item.url}
+                            className="hover:text-brand text-base font-medium text-ink transition-colors"
+                          >
+                            {item.title}
+                          </Link>
+                        ) : (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="hover:text-brand text-base font-medium text-ink transition-colors"
+                          >
+                            {item.title}
+                          </a>
+                        )}
+                        {source !== "notes" && (
+                          <AnnotateLink source={source} url={item.url} title={item.title} />
+                        )}
+                      </div>
                       <p className="text-muted mt-1 text-sm leading-relaxed">{item.excerpt}</p>
                       <Metadata
                         items={[

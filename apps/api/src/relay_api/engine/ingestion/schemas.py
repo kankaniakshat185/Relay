@@ -10,13 +10,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-Source = Literal["github", "slack", "jira"]
-SourceType = Literal["pull_request", "commit", "message", "issue", "review_comment"]
+Source = Literal["github", "slack", "jira", "notes"]
+SourceType = Literal["pull_request", "commit", "message", "issue", "review_comment", "note"]
 """`"review_comment"` covers both a PR's top-level review verdicts
 (APPROVED/CHANGES_REQUESTED/COMMENTED, with a body) and inline code
 comments — one type, not two, since both are "commentary during code
 review" and every downstream consumer (`engine.correlation.
-find_review_comments_for_pr`) treats them identically. See ADR 0016."""
+find_review_comments_for_pr`) treats them identically. See ADR 0016.
+
+`"notes"` is the one source here that isn't a connector — `features.notes`
+writes it directly (via the same `upsert_items`/`index_items` every
+connector uses), synchronously on save rather than on a poll cadence,
+since there's nothing external to poll. See ADR 0021."""
 
 
 @dataclass(frozen=True)

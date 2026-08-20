@@ -13,6 +13,7 @@ const LIVE_ITEMS = [
   { label: "Archaeology", href: "/archaeology" },
   { label: "Who to Ask", href: "/who-to-ask" },
   { label: "Flaky Tests", href: "/flaky-tests" },
+  { label: "Notes", href: "/notes" },
   { label: "Connections", href: "/connections" },
 ] as const;
 
