@@ -34,8 +34,12 @@ _STATE_COOKIE = "relay_connector_oauth_state"
 
 
 def _redirect_uri(provider_name: str) -> str:
+    # See the matching comment in `auth/router.py` — points at the
+    # frontend's proxied path, not this service's own domain, so the state
+    # cookie set below is genuinely first-party (ADR 0024).
     settings = get_settings()
-    return f"{settings.api_base_url}{settings.api_v1_prefix}/connectors/{provider_name}/callback"
+    prefix = settings.api_v1_prefix
+    return f"{settings.frontend_url}/api{prefix}/connectors/{provider_name}/callback"
 
 
 @router.get("", response_model=list[ConnectorStatus])
@@ -66,9 +70,9 @@ async def connect(provider_name: str, current_user: CurrentUser) -> Response:
         max_age=600,
         httponly=True,
         secure=settings.is_production,
-        # See `auth/router.py`'s matching comment — "none" once deployed
-        # (frontend/backend are genuinely different sites), "lax" locally.
-        samesite="none" if settings.is_production else "lax",
+        # See `auth/router.py`'s matching comment — genuinely same-site
+        # now via the frontend's `/api` proxy, so "lax" unconditionally.
+        samesite="lax",
     )
     return response
 

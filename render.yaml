@@ -25,10 +25,12 @@
 # First-time setup, after this Blueprint is synced in Render's dashboard:
 #   1. Every `sync: false` var below needs its real value pasted in once,
 #      in Render's dashboard — none of them are safe to commit.
-#   2. `API_BASE_URL`/`FRONTEND_URL` can't be real values on the very first
-#      sync (the service/Vercel URLs don't exist yet) — use placeholders,
-#      then come back and set the real ones once both are known, and
-#      redeploy.
+#   2. `FRONTEND_URL` can't be a real value on the very first sync (the
+#      Vercel URL doesn't exist yet) — use a placeholder, then come back
+#      and set the real one once it's known, and redeploy. OAuth redirect
+#      URIs are built from this value now, not this service's own domain
+#      (ADR 0024 — Vercel's own `BACKEND_API_URL` needs the reverse: this
+#      service's real `.onrender.com` URL, set the same way).
 
 envVarGroups:
   - name: relay-shared
@@ -97,9 +99,7 @@ services:
       - fromGroup: relay-shared
       - key: ENV
         value: production
-      # Both blank on first sync — see the setup notes above.
-      - key: API_BASE_URL
-        sync: false
+      # Blank on first sync — see the setup notes above.
       - key: FRONTEND_URL
         sync: false
       - key: REDIS_URL

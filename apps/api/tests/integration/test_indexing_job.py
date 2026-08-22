@@ -5,6 +5,7 @@ from `test_ingestion_and_indexing.py`, which tests `engine/ingestion` and
 `engine/indexing` directly, not this orchestration wrapper.
 """
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,6 +20,15 @@ from relay_api.engine.ingestion.models import EMBEDDING_DIMENSIONS
 from relay_api.jobs import indexing as indexing_job
 
 _FAKE_VECTOR = [0.1] * EMBEDDING_DIMENSIONS
+
+
+async def _empty_batches(*_args: object, **_kwargs: object) -> AsyncIterator[list[object]]:
+    """Stands in for `_iter_item_batches` when a test only cares about the
+    rest of the run (last-synced bookkeeping, etc.), not what got fetched —
+    an async generator that immediately stops, same as a real provider
+    with nothing new to report."""
+    return
+    yield  # pragma: no cover - makes this an async generator, never reached
 
 
 class _SameSessionCM:
@@ -60,7 +70,7 @@ async def test_a_successful_run_sets_last_synced_at(db: AsyncSession, test_user:
     with (
         patch.object(indexing_job, "engine", new=MagicMock(dispose=AsyncMock())),
         patch.object(indexing_job, "async_session_factory", return_value=_SameSessionCM(db)),
-        patch.object(indexing_job, "_fetch_items", new=AsyncMock(return_value=[])),
+        patch.object(indexing_job, "_iter_item_batches", new=_empty_batches),
         patch.object(indexing_service, "embed_texts", new=AsyncMock(return_value=[_FAKE_VECTOR])),
     ):
         await indexing_job._run_indexing_for_connector(test_user.id, "github")
@@ -84,7 +94,7 @@ async def test_last_synced_at_updates_even_when_nothing_new_was_found(
     with (
         patch.object(indexing_job, "engine", new=MagicMock(dispose=AsyncMock())),
         patch.object(indexing_job, "async_session_factory", return_value=_SameSessionCM(db)),
-        patch.object(indexing_job, "_fetch_items", new=AsyncMock(return_value=[])),
+        patch.object(indexing_job, "_iter_item_batches", new=_empty_batches),
         patch.object(indexing_service, "embed_texts", new=AsyncMock(return_value=[_FAKE_VECTOR])),
     ):
         await indexing_job._run_indexing_for_connector(test_user.id, "github")

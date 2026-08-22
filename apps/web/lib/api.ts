@@ -1,16 +1,18 @@
 /**
  * Fetch wrapper for the Relay backend.
  *
- * The session cookie is set on the *backend's* domain (it's minted during
- * the OAuth callback, which is a backend route) — not the frontend's. That
- * means Next.js server components can't read it via `next/headers`, so
- * auth-aware calls happen client-side with `credentials: "include"`, which
- * does carry the cookie on cross-origin requests to the API's own domain.
- * If that stops being good enough (e.g. we want SSR'd authenticated pages),
- * the fix is a BFF proxy under `app/api/`, not a same-site cookie hack.
+ * Every call goes to this app's own origin under `/api` — `next.config.ts`'s
+ * `rewrites()` proxies it server-side to the real backend (ADR 0024). The
+ * browser never talks to the backend's domain directly, which is what
+ * makes the session cookie (minted during the OAuth callback, itself
+ * reached through this same proxy) genuinely first-party: no cross-site
+ * request means no `SameSite`/Safari-ITP problem to work around. Next.js
+ * server components still can't read the cookie via `next/headers` (it's
+ * minted by the backend, not this app), so auth-aware calls stay
+ * client-side — that part hasn't changed.
  */
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = "/api";
 
 export class ApiError extends Error {
   constructor(

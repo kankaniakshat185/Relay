@@ -34,8 +34,15 @@ _STATE_COOKIE = "relay_oauth_state"
 
 
 def _redirect_uri(provider_name: str) -> str:
+    # Points at the *frontend's* domain, proxied back to this route by
+    # Next.js `rewrites()` (see `apps/web/next.config.ts`) — not this
+    # service's own domain. That's what makes the session cookie set below
+    # genuinely first-party: the browser never talks to the backend
+    # directly, so from its perspective every request (including this
+    # callback) stays on one site. See ADR 0024 for the full BFF-proxy
+    # writeup and why `SameSite=None` (below) was a workaround, not a fix.
     settings = get_settings()
-    return f"{settings.api_base_url}{settings.api_v1_prefix}/auth/{provider_name}/callback"
+    return f"{settings.frontend_url}/api{settings.api_v1_prefix}/auth/{provider_name}/callback"
 
 
 @router.get("/{provider_name}/login")
@@ -55,15 +62,11 @@ async def login(provider_name: str) -> Response:
         max_age=600,
         httponly=True,
         secure=settings.is_production,
-        # "none" once deployed (frontend and backend are genuinely
-        # different sites — Vercel vs. Render — so "lax" wouldn't survive
-        # the redirect back from the OAuth provider on some browsers'
-        # stricter interpretations of top-level-navigation exemptions);
-        # "lax" locally, where both are just different ports on
-        # `localhost` (same site) and `Secure` isn't available over plain
-        # HTTP. `SameSite=None` requires `Secure=True`, already true above
-        # exactly when this flips.
-        samesite="none" if settings.is_production else "lax",
+        # "lax" unconditionally — the browser only ever talks to
+        # `frontend_url` (see `_redirect_uri` above), so this is genuinely
+        # same-site even in production, not the cross-site case `None`
+        # used to work around.
+        samesite="lax",
     )
     return response
 
@@ -100,10 +103,11 @@ async def callback(
         httponly=True,
         secure=settings.is_production,
         # See the matching comment in `login()` above — this is the
-        # cookie `lib/api.ts`'s `apiFetch` (cross-site once deployed)
-        # actually depends on for every subsequent authenticated request,
-        # not just the redirect that sets it.
-        samesite="none" if settings.is_production else "lax",
+        # cookie `lib/api.ts`'s `apiFetch` depends on for every subsequent
+        # authenticated request, not just the redirect that sets it. Safe
+        # as "lax" because every one of those requests goes through the
+        # frontend's own `/api` proxy, never straight to this domain.
+        samesite="lax",
     )
     return response
 

@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     # --- App ---
     env: str = Field(default="development", alias="ENV")
     api_v1_prefix: str = "/v1"
-    api_base_url: str = Field(default="http://localhost:8000", alias="API_BASE_URL")
+    # No `api_base_url` — OAuth redirect URIs point at `frontend_url`'s
+    # `/api` proxy (ADR 0024), and this service is never addressed by the
+    # browser directly, only by the frontend's rewrite and the Celery
+    # worker's own internal calls (which don't need this setting either).
     frontend_url: str = Field(default="http://localhost:3000", alias="FRONTEND_URL")
 
     # --- Security ---

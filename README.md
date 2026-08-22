@@ -57,7 +57,8 @@ boundary isn't just aspirational, it's been enforced in practice.
 
 ```mermaid
 flowchart TB
-    Browser["Browser<br/>Next.js frontend (Vercel)"]
+    Browser["Browser"]
+    Frontend["Next.js frontend (Vercel)<br/>/api/* → BFF proxy (ADR 0024)"]
 
     subgraph API["FastAPI backend (Render)"]
         direction TB
@@ -94,8 +95,9 @@ flowchart TB
     Providers["GitHub · Slack · Jira APIs"]
     LLMs["OpenAI · Anthropic · Groq · Gemini"]
 
-    Browser -->|session cookie| Auth
-    Browser -->|session cookie| Features
+    Browser -->|same-site cookie| Frontend
+    Frontend -->|proxied, server-side| Auth
+    Frontend -->|proxied, server-side| Features
     Features --> Engine
     Connectors --> Providers
     Auth --> DB
@@ -210,24 +212,27 @@ Backend (FastAPI + Celery worker, combined into one process on Render's
 free tier — background workers aren't available below a paid plan, so
 the Celery worker+beat process runs backgrounded inside the same web
 service) on **Render**, frontend on **Vercel**, database on **Neon**
-(serverless Postgres with pgvector). `docs/render.yaml` documents the
-exact build/start commands and required environment variables as a
-reference — it's not a live Render Blueprint (see the file's own header
-for why), just an accurate record to copy values from when configuring
-the actual services by hand.
+(serverless Postgres with pgvector). `render.yaml` (repo root) is a live
+Render Blueprint documenting the exact build/start commands and required
+environment variables.
 
 Login and data-access OAuth are deliberately separate app registrations
 per provider (ADR 0003) — six OAuth apps total across GitHub, Slack,
-Google, and Jira once both are fully set up.
+Google, and Jira once both are fully set up. All six register their
+callback URL under the **frontend's** domain, not the backend's — see
+the BFF proxy note below.
 
-**Known limitation:** the session cookie is set on the backend's own
-domain and read cross-site by the frontend (`credentials: "include"`).
-This works in Chrome; Safari's Intelligent Tracking Prevention blocks
-cross-site cookies by default regardless of `SameSite=None; Secure`, so
-login doesn't currently persist in Safari. The documented fix (a BFF
-proxy under the frontend's own domain, so the cookie is never
-cross-site to begin with) is a known, scoped, not-yet-built follow-up —
-see `apps/web/lib/api.ts`'s own docstring.
+**Cross-site cookies, fixed via a BFF proxy (ADR 0024):** the frontend
+never calls the backend's domain directly. `next.config.ts`'s
+`rewrites()` proxies every `/api/v1/*` call server-side to the real
+backend (`BACKEND_API_URL`, a Vercel env var), so from the browser's
+perspective every request — including the OAuth callback that mints the
+session cookie — stays on one site. That's what actually fixes Safari:
+Intelligent Tracking Prevention blocks cross-site cookies on `fetch`/XHR
+regardless of `SameSite=None; Secure`, and no cookie attribute works
+around that — removing the cross-site request is the only fix, which is
+why this replaced an earlier `SameSite=None` workaround rather than
+sitting alongside it.
 
 ## Documentation
 

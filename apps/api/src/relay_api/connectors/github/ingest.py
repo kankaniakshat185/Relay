@@ -2,6 +2,8 @@
 `engine/ingestion` expects. Called by `jobs/indexing.py` — nothing else
 should reach into `client.py`/`normalize.py` directly."""
 
+from collections.abc import AsyncIterator
+
 from relay_api.connectors.github import client, normalize
 from relay_api.engine.ingestion.schemas import NormalizedItem
 
@@ -43,12 +45,24 @@ account's repo count grows substantially — these aren't derived from a
 formula that self-adjusts."""
 
 
-async def fetch_normalized_items(access_token: str) -> list[NormalizedItem]:
+async def iter_normalized_items_by_repo(access_token: str) -> AsyncIterator[list[NormalizedItem]]:
+    """Same fetch/normalize work as `fetch_normalized_items`, but yields one
+    connected repo's items at a time instead of accumulating every repo's
+    PRs/reviews/comments/commits into one list before returning anything.
+
+    Found live: an account with several active repos produced enough
+    in-memory `NormalizedItem`s (worst case ~801 API responses' worth,
+    see `_REVIEW_FETCH_LIMIT`'s own math) to OOM-kill Render's free-tier
+    instance mid-sync — that whole backlog was held in memory
+    simultaneously, with nothing written to the database until every repo
+    had been walked. `jobs/indexing.py`'s `_iter_item_batches` persists
+    (upsert + index) after each yield here, so peak memory is bounded to
+    one repo's worth of items, not the connected account's."""
     repos = await client.list_recent_repos(access_token, limit=_REPO_LIMIT)
 
-    items: list[NormalizedItem] = []
     for repo in repos:
         owner, name = repo["owner"]["login"], repo["name"]
+        items: list[NormalizedItem] = []
 
         prs = await client.list_recent_pull_requests(
             access_token, owner, name, limit=_PR_LIMIT_PER_REPO
@@ -77,4 +91,17 @@ async def fetch_normalized_items(access_token: str) -> list[NormalizedItem]:
         )
         items.extend(normalize.normalize_commit(commit, repo["full_name"]) for commit in commits)
 
+        yield items
+
+
+async def fetch_normalized_items(access_token: str) -> list[NormalizedItem]:
+    """Full flattened list across every connected repo — kept for callers
+    that genuinely want the whole account's items at once (this module's
+    own tests included). `jobs/indexing.py`'s real per-connector run uses
+    `iter_normalized_items_by_repo` directly instead, specifically to
+    avoid materializing this whole list in memory (see that function's
+    docstring)."""
+    items: list[NormalizedItem] = []
+    async for repo_items in iter_normalized_items_by_repo(access_token):
+        items.extend(repo_items)
     return items

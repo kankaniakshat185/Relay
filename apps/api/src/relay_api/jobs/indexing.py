@@ -1,12 +1,15 @@
 """Celery task that runs after a connector is connected (see
 `connectors/router.py`'s callback): fetch → normalize → ingest → index for
-one user's one provider. Each connector's `ingest.fetch_normalized_items`
-already returns the common `NormalizedItem` shape (`engine/ingestion`), so
-this orchestration layer stays provider-agnostic past the initial dispatch.
+one user's one provider. Each connector's ingest module yields the common
+`NormalizedItem` shape (`engine/ingestion`) in one or more batches (see
+`_iter_item_batches`), so this orchestration layer stays provider-agnostic
+past the initial dispatch — it persists whatever batches show up, never
+anything provider-specific about how they're produced.
 """
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from relay_api.connectors import service as connector_service
@@ -24,19 +27,36 @@ from relay_api.jobs.celery_app import celery_app
 logger = get_logger(__name__)
 
 
-async def _fetch_items(
+async def _iter_item_batches(
     provider: str, access_token: str, credential: ConnectorCredential
-) -> list[NormalizedItem]:
+) -> AsyncIterator[list[NormalizedItem]]:
+    """Yields items in provider-natural batches instead of one flat list for
+    the whole account. GitHub's real per-repo fan-out (up to `_REPO_LIMIT`
+    repos, each with PRs/reviews/comments/commits — see ADR 0016's own
+    worst-case math) is the one connector large enough for this to matter:
+    found live, an account with several active repos produced enough
+    `NormalizedItem`s held in memory at once (nothing persisted until
+    every repo had been walked) to OOM-kill Render's free-tier instance
+    mid-sync. `_run_indexing_for_connector` below persists (upsert +
+    index) after each yield, bounding peak memory to one batch, not the
+    whole account. Slack/Jira's fetches are already small and single-call-
+    shaped (10 channels/50 issues, worst case), so they yield one batch —
+    this is a memory fix for GitHub's scale, not a per-provider behavior
+    change for the other two."""
     if provider == "github":
-        return await github_ingest.fetch_normalized_items(access_token)
+        async for repo_items in github_ingest.iter_normalized_items_by_repo(access_token):
+            yield repo_items
+        return
     if provider == "slack":
-        return await slack_ingest.fetch_normalized_items(
+        yield await slack_ingest.fetch_normalized_items(
             access_token, credential.external_account_id
         )
+        return
     if provider == "jira":
-        return await jira_ingest.fetch_normalized_items(
+        yield await jira_ingest.fetch_normalized_items(
             access_token, credential.external_account_id, credential.external_account_label
         )
+        return
     raise ValueError(f"Unknown connector provider: {provider}")
 
 
@@ -78,11 +98,14 @@ async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None
             )
             return
 
-        items = await _fetch_items(provider, access_token, credential)
-
-        await ingestion_service.upsert_items(db, user_id, items)
-        to_index = await ingestion_service.get_items_needing_indexing(db, user_id)
-        await indexing_service.index_items(db, to_index)
+        total_ingested = 0
+        total_indexed = 0
+        async for batch in _iter_item_batches(provider, access_token, credential):
+            await ingestion_service.upsert_items(db, user_id, batch)
+            to_index = await ingestion_service.get_items_needing_indexing(db, user_id)
+            await indexing_service.index_items(db, to_index)
+            total_ingested += len(batch)
+            total_indexed += len(to_index)
 
         # Set regardless of whether anything new was found — "last synced"
         # is a freshness signal about the sync itself having run, not
@@ -96,8 +119,8 @@ async def _run_indexing_for_connector(user_id: uuid.UUID, provider: str) -> None
             extra={
                 "user_id": str(user_id),
                 "provider": provider,
-                "ingested": len(items),
-                "indexed": len(to_index),
+                "ingested": total_ingested,
+                "indexed": total_indexed,
             },
         )
 
