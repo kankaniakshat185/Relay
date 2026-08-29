@@ -14,6 +14,17 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # Every call site uses `.delay()` and never reads a result back
+    # (`connectors/router.py`, `jobs/indexing.py`, `jobs/flaky_tests.py` —
+    # all fire-and-forget). Without this, Celery still writes each task's
+    # state/result to the Redis backend anyway, on every single run of the
+    # 15-minute periodic resync — pure wasted Redis requests against
+    # Upstash's free-tier monthly cap (found live: exhausted the 500,000-
+    # request limit running continuously for about a week, seemingly from
+    # this kind of steady background traffic more than actual task
+    # volume). This doesn't fix the cap itself, just stops paying for
+    # writes nothing ever reads.
+    task_ignore_result=True,
 )
 
 
