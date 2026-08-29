@@ -1,3 +1,5 @@
+import ssl
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -13,6 +15,34 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+
+def tls_config_if_needed(redis_url: str) -> dict[str, int] | None:
+    """Upstash's managed Redis (used in production) issues `rediss://` URLs
+    (TLS) — Celery/kombu's redis transport refuses to even connect over
+    `rediss://` without an explicit `ssl_cert_reqs`, raising `ValueError: A
+    rediss:// URL must have parameter ssl_cert_reqs...` the first time
+    anything actually tries to publish or consume. Found live: every
+    `.delay()` call (the OAuth callback's post-connect indexing kickoff,
+    and the manual "Sync Now" endpoint) hit this and raised uncaught,
+    surfacing as a raw 500 — for the OAuth callback specifically, *after*
+    the connector credential had already been committed to the database,
+    which is why refreshing the page afterward showed it connected anyway.
+
+    `CERT_NONE`, not `CERT_REQUIRED`: this only authenticates the Redis
+    transport, which is already authenticated by the URL's own password;
+    verifying Upstash's cert chain would need extra CA bundle setup this
+    app doesn't otherwise need. Returns `None` for a plain `redis://` URL
+    (local dev, `docker run redis:7-alpine`) — no TLS config to add."""
+    if not redis_url.startswith("rediss://"):
+        return None
+    return {"ssl_cert_reqs": ssl.CERT_NONE}
+
+
+_tls_config = tls_config_if_needed(settings.redis_url)
+if _tls_config is not None:
+    celery_app.conf.broker_use_ssl = _tls_config
+    celery_app.conf.redis_backend_use_ssl = _tls_config
 
 # related_name="indexing", not the default "tasks" — our task module is
 # jobs/indexing.py, not jobs/tasks.py. Without this, autodiscover silently
