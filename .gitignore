@@ -40,3 +40,7 @@ pnpm-debug.log*
 
 # --- Alembic (keep migrations, ignore local db) ---
 *.sqlite3
+
+# --- Celery beat's local schedule store (runtime state, not source —
+# regenerated every time `celery beat` runs locally) ---
+celerybeat-schedule*
