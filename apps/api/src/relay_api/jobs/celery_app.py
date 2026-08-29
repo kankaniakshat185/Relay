@@ -3,6 +3,12 @@ import ssl
 from celery import Celery
 from celery.schedules import crontab
 
+# Must run before anything in this process touches the database — see
+# that module's own docstring. Found live: `index_connector_task`'s
+# `db.commit()` raised `NoReferencedTableError` on `users` the first time
+# it actually ran in production, because this process never otherwise
+# imports `auth.models` (only `main.py`'s router chain does).
+from relay_api.core import model_registry  # noqa: F401
 from relay_api.core.config import get_settings
 
 settings = get_settings()
