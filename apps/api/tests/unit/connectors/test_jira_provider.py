@@ -8,14 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from relay_api.connectors.base import ConnectorExchangeError
 from relay_api.connectors.jira import provider
 
 
-def _mock_client(response: httpx.Response) -> MagicMock:
+def _mock_client(response: httpx.Response, get_response: httpx.Response | None = None) -> MagicMock:
     client = MagicMock()
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     client.post = AsyncMock(return_value=response)
+    if get_response is not None:
+        client.get = AsyncMock(return_value=get_response)
     return client
 
 
@@ -60,3 +63,23 @@ async def test_refresh_propagates_http_errors_for_the_caller_to_handle() -> None
         pytest.raises(httpx.HTTPStatusError),
     ):
         await provider.refresh_access_token("revoked-refresh")
+
+
+async def test_exchange_with_no_accessible_resources_raises_connector_exchange_error() -> None:
+    # A valid token exchange can still grant access to zero Jira sites
+    # (e.g. the user has no site memberships) — found live as a bare
+    # ValueError with no registered handler in main.py, surfacing to the
+    # user as a raw 500 instead of a clean, actionable message.
+    token_response = _token_response({"access_token": "tok", "expires_in": 3600})
+    empty_resources = httpx.Response(
+        200, json=[], request=httpx.Request("GET", provider._ACCESSIBLE_RESOURCES_URL)
+    )
+    with (
+        patch.object(
+            provider.httpx,
+            "AsyncClient",
+            return_value=_mock_client(token_response, get_response=empty_resources),
+        ),
+        pytest.raises(ConnectorExchangeError, match="no accessible Jira sites"),
+    ):
+        await provider.exchange_code("some-code", "https://example.com/callback")

@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from relay_api.connectors.base import ConnectorAccount
+from relay_api.connectors.base import ConnectorAccount, ConnectorExchangeError
 from relay_api.core.config import get_settings
 
 _AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
@@ -45,7 +45,7 @@ async def exchange_code(code: str, redirect_uri: str) -> ConnectorAccount:
         data = response.json()
 
     if not data.get("ok"):
-        raise ValueError(f"Slack OAuth error: {data.get('error')}")
+        raise ConnectorExchangeError(f"Slack OAuth error: {data.get('error')}")
 
     return ConnectorAccount(
         access_token=data["access_token"],

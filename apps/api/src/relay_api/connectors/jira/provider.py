@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from relay_api.connectors.base import ConnectorAccount, RefreshedTokens
+from relay_api.connectors.base import ConnectorAccount, ConnectorExchangeError, RefreshedTokens
 from relay_api.core.config import get_settings
 
 _AUTHORIZE_URL = "https://auth.atlassian.com/authorize"
@@ -73,7 +73,9 @@ async def exchange_code(code: str, redirect_uri: str) -> ConnectorAccount:
         resources = resources_response.json()
 
     if not resources:
-        raise ValueError("Jira OAuth succeeded but no accessible Jira sites were granted")
+        raise ConnectorExchangeError(
+            "Jira OAuth succeeded but no accessible Jira sites were granted"
+        )
 
     site = resources[0]
     expires_in = token_data.get("expires_in")

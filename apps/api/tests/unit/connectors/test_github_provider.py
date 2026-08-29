@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from relay_api.connectors.base import RefreshGrantError
+from relay_api.connectors.base import ConnectorExchangeError, RefreshGrantError
 from relay_api.connectors.github import provider
 
 
@@ -64,3 +64,18 @@ async def test_refresh_with_error_body_raises_refresh_grant_error_not_http_error
         pytest.raises(RefreshGrantError),
     ):
         await provider.refresh_access_token("revoked-refresh")
+
+
+async def test_exchange_with_error_body_raises_connector_exchange_error_not_bare_value_error() -> (
+    None
+):
+    # Same 200-with-error-body shape as the refresh case above, but from
+    # the *initial* connect exchange — found live: this used to raise a
+    # bare ValueError with no registered handler in main.py, surfacing to
+    # the user as a raw 500 instead of a clean, actionable message.
+    response = _token_response({"error": "bad_verification_code"}, status_code=200)
+    with (
+        patch.object(provider.httpx, "AsyncClient", return_value=_mock_client(response)),
+        pytest.raises(ConnectorExchangeError, match="bad_verification_code"),
+    ):
+        await provider.exchange_code("some-code", "https://example.com/callback")

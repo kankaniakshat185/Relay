@@ -20,7 +20,12 @@ from urllib.parse import urlencode
 
 import httpx
 
-from relay_api.connectors.base import ConnectorAccount, RefreshedTokens, RefreshGrantError
+from relay_api.connectors.base import (
+    ConnectorAccount,
+    ConnectorExchangeError,
+    RefreshedTokens,
+    RefreshGrantError,
+)
 from relay_api.core.config import get_settings
 
 _AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
@@ -58,7 +63,7 @@ async def exchange_code(code: str, redirect_uri: str) -> ConnectorAccount:
         token_response.raise_for_status()
         token_data = token_response.json()
         if "error" in token_data:
-            raise ValueError(f"GitHub OAuth error: {token_data['error']}")
+            raise ConnectorExchangeError(f"GitHub OAuth error: {token_data['error']}")
 
         user_response = await client.get(
             _USER_URL,

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from relay_api.auth.router import router as auth_router
 from relay_api.auth.service import OAuthExchangeError
+from relay_api.connectors.base import ConnectorExchangeError
 from relay_api.connectors.router import router as connectors_router
 from relay_api.connectors.service import ConnectorNotConnectedError, TokenRefreshError
 from relay_api.core.config import get_settings
@@ -126,6 +127,26 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=400,
             content={"detail": "Sign-in failed — the provider rejected the request. Try again."},
+        )
+
+    @app.exception_handler(ConnectorExchangeError)
+    async def connector_exchange_error_handler(
+        _request: Request, exc: ConnectorExchangeError
+    ) -> JSONResponse:
+        # Found live: every provider's own `exchange_code` already checks
+        # for a 200-with-error-body response (GitHub's `error` field,
+        # Slack's `ok: false`) and raises for it, but nothing caught that
+        # exception here — a real connect failure (stale client secret,
+        # the wrong app's redirect URL registered, a reused/expired code)
+        # surfaced as a raw 500 with no real reason, same class of bug
+        # `OAuthExchangeError` above already fixed for the login flow.
+        logger.warning("connector_exchange_error", extra={"error": str(exc)})
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "Couldn't connect — the provider rejected the request. "
+                "Check the connector's credentials and try again."
+            },
         )
 
     @app.exception_handler(CodeContextError)

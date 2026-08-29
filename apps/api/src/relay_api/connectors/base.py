@@ -65,3 +65,18 @@ class RefreshGrantError(Exception):
     covers that case directly), GitHub returns 200 with an `error` field
     in the body — so this is the one type `connectors/service.py` needs
     to catch regardless of which provider it's refreshing."""
+
+
+class ConnectorExchangeError(Exception):
+    """Raised by a provider's own `exchange_code` when the *initial*
+    connect exchange itself is rejected — GitHub/Slack/Jira all signal
+    this with HTTP 200 and an `error`/`ok: false` field in the body rather
+    than an error status, same reasoning as `auth/service.py`'s
+    `OAuthExchangeError` for the login flow. Found live: every provider's
+    `exchange_code` already checked for this and raised a bare
+    `ValueError`, which had no registered handler in `main.py` — a real
+    connect failure (stale client secret, wrong app's redirect URL
+    registered, a reused/expired code) surfaced as an opaque 500 instead
+    of the actual reason. `connectors/router.py`'s callback is the one
+    place that needs to catch this, regardless of which provider raised
+    it."""
