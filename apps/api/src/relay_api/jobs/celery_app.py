@@ -31,6 +31,19 @@ celery_app.conf.update(
     # volume). This doesn't fix the cap itself, just stops paying for
     # writes nothing ever reads.
     task_ignore_result=True,
+    # kombu's redis transport polls the broker with `BRPOP <queue> 1` —
+    # a 1-second blocking timeout, by default — in a loop for as long as
+    # the worker is connected, entirely independent of whether any task
+    # ever runs (confirmed by reading kombu's own `Transport.brpop_timeout
+    # = 1` and the `polling_interval` override that sets it). That's
+    # ~86,400 Redis requests/day from an idle worker alone — found live,
+    # this is almost certainly what actually exhausted Upstash's
+    # 500,000-request monthly cap in about a week, not real task volume.
+    # 30s keeps task pickup fast enough for jobs that already take much
+    # longer than that to run (indexing, resync), while cutting idle
+    # polling to ~2,880 requests/day — comfortably sustainable even with
+    # the worker kept alive 24/7 by the external keep-alive ping.
+    broker_transport_options={"polling_interval": 30},
 )
 
 

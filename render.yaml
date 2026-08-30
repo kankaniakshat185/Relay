@@ -89,9 +89,18 @@ services:
     # are I/O-bound (waiting on GitHub/Slack/Jira API calls), not
     # CPU-bound, so running them one at a time in a single process costs
     # nothing functionally at this scale.
+    # `--without-gossip --without-mingle --without-heartbeat`: these
+    # coordinate multiple workers with each other (gossip/mingle) or feed
+    # monitoring tools like Flower (heartbeat) — pure overhead, and pure
+    # extra Redis traffic, with exactly one worker and no monitoring
+    # dashboard in front of it. Combined with `celery_app.py`'s
+    # `polling_interval`, this is the other real lever against Upstash's
+    # request cap (found live: idle BRPOP polling alone was consuming
+    # ~86,400 requests/day, see that file's own comment).
     startCommand: >-
       uv run --package relay-api alembic -c apps/api/alembic.ini upgrade head &&
-      (uv run --package relay-api celery -A relay_api.jobs.celery_app worker -B --loglevel=info --pool=solo &) &&
+      (uv run --package relay-api celery -A relay_api.jobs.celery_app worker -B --loglevel=info --pool=solo
+      --without-gossip --without-mingle --without-heartbeat &) &&
       uv run --package relay-api uvicorn relay_api.main:app
       --app-dir apps/api/src --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz

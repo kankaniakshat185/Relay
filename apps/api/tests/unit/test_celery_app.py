@@ -22,6 +22,17 @@ def test_tls_config_sets_cert_none_for_rediss_url() -> None:
     assert config == {"ssl_cert_reqs": ssl.CERT_NONE}
 
 
+def test_broker_polling_interval_is_not_the_1_second_default() -> None:
+    # kombu's redis transport defaults to a 1-second BRPOP timeout,
+    # polling continuously whether or not any task is ever enqueued —
+    # found live: this alone burned through Upstash's 500,000-request
+    # monthly cap in about a week. Asserting "not the default" rather
+    # than a specific number: the exact value is a latency/request-volume
+    # tradeoff that might get retuned later, but it must never silently
+    # regress back to polling every second.
+    assert celery_app.conf.broker_transport_options.get("polling_interval") not in (None, 1)
+
+
 def test_index_connector_task_is_registered() -> None:
     assert "relay_api.jobs.indexing.index_connector_task" in celery_app.tasks
 

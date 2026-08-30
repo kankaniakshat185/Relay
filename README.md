@@ -141,7 +141,7 @@ flowchart TB
 ## Testing
 
 ```
-307 tests passing · 94.7% coverage on engine/ + features/ · CI gate at 85%
+314 tests passing · 94.7% coverage on engine/ + features/ · CI gate at 85%
 ```
 
 Split across three kinds, each testing a different thing:
@@ -233,6 +233,24 @@ regardless of `SameSite=None; Secure`, and no cookie attribute works
 around that — removing the cross-site request is the only fix, which is
 why this replaced an earlier `SameSite=None` workaround rather than
 sitting alongside it.
+
+**Redis over TLS, and Upstash's request cap (found live, both):** Celery's
+Redis transport refuses to connect over a `rediss://` URL at all without
+an explicit `ssl_cert_reqs` — surfaced as every background job (connector
+connect, manual sync, the periodic resync) failing with a raw 500 in a
+way that looked unrelated to Redis entirely. `jobs/celery_app.py` sets
+this automatically whenever `REDIS_URL` starts with `rediss://`; a plain
+`redis://` URL (local dev) is untouched. Separately: kombu's redis
+transport polls the broker with a 1-second `BRPOP` timeout *by default,
+forever, whether or not any task ever runs* — an always-on worker (kept
+alive by an external uptime ping, since Render's free tier sleeps
+idle web services) burns roughly 86,400 requests/day from idle polling
+alone, which exhausted Upstash's 500,000/month free-tier cap in about a
+week with almost no real task volume. Tuned via `broker_transport_options`
+(`polling_interval`, 30s) and `--without-gossip --without-mingle
+--without-heartbeat` on the worker (`render.yaml`) — both cut idle Redis
+traffic substantially without slowing down real task pickup by anything
+that matters at this scale.
 
 ## Documentation
 
