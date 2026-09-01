@@ -1,4 +1,5 @@
-# Relay
+<h1 align="center">Relay</h1>
+
 
 A shared context engine that correlates GitHub, Slack, and Jira — six purpose-built query interfaces on **one** retrieval/correlation engine, not six disconnected integrations.
 
