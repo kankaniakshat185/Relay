@@ -1,59 +1,34 @@
 # Relay
 
-A shared context engine that correlates data across GitHub, Slack, and
-Jira — exposed through six purpose-built query interfaces built on **one**
-retrieval/correlation engine, not six disconnected integrations. Pick a
-question, a file, a pull request, or a time window; Relay traces the
-connections across every source you've connected and answers from there.
+A shared context engine that correlates data across GitHub, Slack, and Jira — exposed through six purpose-built query interfaces built on **one** retrieval/correlation engine, not six disconnected integrations. Ask a question, pick a file, a pull request, or a time window; Relay traces the connections across every source you've connected and answers from there.
 
-**Live demo:** `https://therelay.vercel.app` — sign in
-with GitHub/Slack/Google to try it.
+**Live demo:** `https://therelay.vercel.app` — sign in with GitHub/Slack/Google to try it.
 
-See [`plan.md`](plan.md) for the full original architecture/phase plan,
-and [`docs/adr/`](docs/adr/) / [`docs/decisions/`](docs/decisions/) /
-[`docs/phases/`](docs/phases/) for the real, ongoing record of what was
-built, why, and what was deliberately cut.
+## The core bet
+
+Most "integrate GitHub + Slack + Jira" projects are three separate connectors, each wired straight into its own feature. Relay's architecture makes a specific, falsifiable bet instead: retrieval, correlation, ranking, and LLM synthesis are genuinely reusable across query types, so they live in one `engine/` layer that every feature calls into, never duplicates.
+
+That bet has been tested twice by real feature work, not just asserted:
+- `engine/correlation` was extracted mid-project when **Who Should I Ask** needed the exact ticket-correlation logic **Archaeology** already had.
+- `engine/synthesis` was extracted when **Weekly Digest** needed **Context Search**'s LLM-synthesis logic.
+- Most recently, **PR Blast Radius** (rank everyone who touched a pull request) shipped as a new `target_type` on an existing endpoint, not a seventh page — see [ADR 0023](docs/adr/0023-pr-blast-radius-entry-point.md) — specifically because the ranking pipeline needed zero changes, only how the file set gets resolved.
+
+A `features/*` module is not allowed to import another `features/*` module, only `engine/`. When two features independently need the same logic, that's a signal it belongs in the engine — not a reason to cross-import.
 
 ## Features
 
 Six query modes, one engine underneath every one of them:
 
-- **Context Search** — ask a question in plain English, get an answer
-  synthesized from your connected GitHub/Slack/Jira activity, with real
-  source citations (not the model's own guess at what's relevant). Raw
-  retrieval mode is always free and on by default; AI-summary mode
-  supports OpenAI, Anthropic, Groq, or Gemini — bring your own API key,
-  or use Relay's rate-limited free tier (OpenAI only).
-- **Codebase Archaeology** — pick a file, and Relay traces its git blame
-  (live, via GitHub's GraphQL API) back through each commit to the pull
-  request that introduced it, the Jira ticket it closed, and the Slack
-  discussion happening at the time.
-- **Who Should I Ask** — ranks everyone who's touched a file, a whole
-  directory, or a specific pull request ("PR Blast Radius") by recency
-  or frequency of contribution — including reviewers who commented
-  without ever committing a line, not just authors.
-- **Flaky Test Investigator** — tracks each GitHub Actions workflow's
-  pass/fail history and flags what looks flaky rather than genuinely
-  broken, combining real per-attempt outcome data with a documented
-  heuristic fallback where ground truth isn't available.
-- **Notes** — freeform notes, or ones annotated directly onto a specific
-  commit, PR, ticket, or Slack message. Indexed the same way every
-  connector's data is, so notes surface in Context Search too — a note
-  is Relay's fourth searchable source, not a separate bolt-on app.
-- **Weekly Digest** — a time window instead of a keyword or a file:
-  everything across GitHub, Slack, Jira, and Notes in the last N days,
-  optionally synthesized into what shipped, what's still being
-  discussed, and what looks unresolved.
+| Mode | What it does |
+|---|---|
+| **Context Search** | Ask a question in plain English; get an answer synthesized from connected GitHub/Slack/Jira activity with real source citations. Raw retrieval is free and on by default; AI-summary mode supports OpenAI, Anthropic, Groq, or Gemini (BYOK, or a rate-limited free tier). |
+| **Codebase Archaeology** | Pick a file; Relay traces its live git blame (GitHub GraphQL) back through each commit to the PR that introduced it, the Jira ticket it closed, and the Slack discussion happening at the time. |
+| **Who Should I Ask** | Ranks everyone who's touched a file, a directory, or a specific pull request ("PR Blast Radius") by recency or frequency of contribution — including reviewers who commented without ever committing. |
+| **Flaky Test Investigator** | Tracks each GitHub Actions workflow's pass/fail history and flags what looks flaky rather than genuinely broken, using real per-attempt outcome data with a documented heuristic fallback where ground truth isn't available. |
+| **Notes** | Freeform notes, or ones annotated onto a specific commit/PR/ticket/Slack message. Indexed the same way every connector's data is, so notes surface in Context Search too — a fourth searchable source, not a bolt-on. |
+| **Weekly Digest** | A time window instead of a keyword: everything across GitHub, Slack, Jira, and Notes in the last N days, optionally synthesized into what shipped, what's still being discussed, and what looks unresolved. |
 
 ## Architecture
-
-The core bet: every feature above is a thin router + service that calls
-into a **shared engine** — retrieval, indexing, correlation, ranking, and
-LLM synthesis all live in one place, used by whichever feature needs
-them, never duplicated per-feature. Two engine extractions happened
-mid-project specifically because a second feature needed logic a feature
-already had (`engine/correlation`, `engine/synthesis`) — the module
-boundary isn't just aspirational, it's been enforced in practice.
 
 ```mermaid
 flowchart TB
@@ -90,7 +65,7 @@ flowchart TB
     Worker["Celery worker<br/>15-min periodic resync + indexing"]
 
     DB[("Neon Postgres<br/>+ pgvector")]
-    Cache[("Redis<br/>broker + rate limits")]
+    Cache[("Redis<br/>broker")]
 
     Providers["GitHub · Slack · Jira APIs"]
     LLMs["OpenAI · Anthropic · Groq · Gemini"]
@@ -108,21 +83,46 @@ flowchart TB
     Engine --> LLMs
 ```
 
-**Why it's shaped this way:**
-- `features/*` may only import from `engine/`, never from another
-  `features/*` module — if two features need the same logic, that's the
-  signal it belongs in `engine/`, not a reason to cross-import (this
-  rule has fired for real twice: `engine/correlation` when Who Should I
-  Ask needed Archaeology's ticket-correlation logic, `engine/synthesis`
-  when Weekly Digest needed Context Search's LLM-synthesis logic).
-- `connectors/*` is the *only* place that talks to GitHub/Slack/Jira's
-  real APIs — everything else works against `ingested_items`, a single
-  normalized table every connector writes into the same shape.
-- Retrieval is genuinely polymorphic, not just "search with different
-  filters": keyword query (Context Search), a file/directory/PR (Who
-  Should I Ask), git history (Archaeology), and a time window (Weekly
-  Digest) are four structurally different ways of asking the same
-  underlying engine for relevant items.
+`connectors/*` is the only place that talks to GitHub/Slack/Jira's real APIs — everything else works against `ingested_items`, one normalized table every connector writes into the same shape. Retrieval is genuinely polymorphic across the four query shapes above it: a keyword (Context Search), a file/directory/PR (Who Should I Ask), git history (Archaeology), and a time window (Weekly Digest) all resolve to "relevant items" through the same engine, not four parallel implementations.
+
+## Engineering deep dives
+
+A few pieces of this system involved a real decision under uncertainty, not just wiring libraries together.
+
+### Empirically calibrated correlation threshold
+
+**Problem:** deciding whether a Slack message or Jira ticket is genuinely *related* to a piece of code, not just superficially similar, needs a cutoff on the hybrid search score. An arbitrary threshold either buries real correlations or surfaces noise as if it were signal.
+
+**Approach:** rather than guessing a round number, [`engine/correlation/service.py`](apps/api/src/relay_api/engine/correlation/service.py) measured the actual score distributions of genuine matches vs. noise on real ingested data — genuine matches scored 0.58–0.66; non-matches topped out at 0.384.
+
+**Result:** `_MIN_RELEVANCE_SCORE = 0.48`, placed near the midpoint of that gap rather than hugging the noise ceiling — biased toward precision over recall for a feature that presents results as "this is related," a stronger claim than raw search ever makes.
+
+**Tradeoff:** the threshold is derived from one observed dataset, not a formal precision/recall curve — it's a documented, reasoned calibration, not a guarantee that holds at every possible scale.
+
+### Differential-tested ranking, not one "correct" answer
+
+[`engine/ranking`](apps/api/src/relay_api/engine/ranking/strategies.py) implements two scoring strategies over the same touch history — recency-weighted (exponential half-life decay) and frequency-weighted (raw touch count). They're expected to *disagree*, not converge:
+
+> Carol fixed one bug yesterday. Dave wrote most of the file in a burst eight months ago and hasn't touched it since. Recency favors Carol; frequency favors Dave. Neither answer is wrong.
+
+Instead of picking a winner, [`tests/differential/test_ranking_strategies.py`](apps/api/tests/differential/test_ranking_strategies.py) asserts where the two strategies agree, and documents — with this exact fixture — where and why they diverge. `features/who_to_ask` exposes both as a user-facing choice rather than collapsing them into one hybrid score, unlike `engine/indexing`'s search ranking, which does use a fixed 0.4/0.6 keyword/vector blend because there both signals are meant to agree.
+
+### A cross-site cookie bug, found and fixed before it reached users — then found again in a harder form
+
+Moving from `localhost` to real Vercel/Render domains changes cookies from same-site to cross-site. `SameSite=None; Secure` is necessary but not sufficient: Safari's Intelligent Tracking Prevention blocks cross-site cookies on `fetch`/XHR regardless of that attribute — no cookie flag fixes it while the frontend and backend are genuinely different sites.
+
+The real fix ([ADR 0024](docs/adr/0024-bff-proxy-for-safari-cookie.md)): a BFF proxy. `next.config.ts`'s `rewrites()` proxies every `/api/v1/*` call server-side to the backend, so from the browser's perspective — including the OAuth callback that mints the session cookie — every request stays on one site. This replaced the `SameSite=None` workaround rather than sitting alongside it, since removing the cross-site request is the only thing that actually works in Safari.
+
+### A production incident traced to a library default, not a typo
+
+Live symptom: connecting a GitHub/Slack account intermittently returned a raw Internal Server Error, but refreshing the page showed the connection had actually succeeded. Both this *and* every background sync job started failing outright after switching from local Redis to Upstash (managed, TLS-only Redis).
+
+Tracing it down (in order, each confirmed against source or live logs before moving on, not guessed):
+1. Upstash issues `rediss://` URLs. Celery's Redis transport refuses to connect over `rediss://` at all without an explicit `ssl_cert_reqs` — every `.delay()` call raised, uncaught, *after* the connector credential had already been committed to the database, which is exactly why a refresh showed it connected anyway.
+2. Fixing that unmasked a second, unrelated bug: the Celery worker process never imports `auth/models.py` (only the web process's router chain does), so `ConnectorCredential`'s string-based `ForeignKey("users.id")` couldn't resolve — `NoReferencedTableError`, on the very first real `db.commit()` in production.
+3. Fixing *that* unmasked a third problem: Upstash's free-tier 500,000-request monthly cap, fully exhausted in about a week. Reading kombu's own transport source (`Transport.brpop_timeout = 1`) showed why: an idle Celery worker polls Redis with a blocking `BRPOP` roughly once a second, forever, independent of whether any task ever runs — about 86,400 requests/day from a worker doing nothing.
+
+Fix: `broker_transport_options={"polling_interval": 30}` plus `--without-gossip --without-mingle --without-heartbeat` on a single-worker deployment. Idle polling drops to ~2,880 requests/day; real task latency is unaffected at this scale (jobs already take longer than 30s to run). Each of the three bugs above is now defended by a regression test rather than fixed by inspection alone.
 
 ## Tech stack
 
@@ -132,34 +132,29 @@ flowchart TB
 | Database | PostgreSQL + pgvector (hybrid keyword/vector search), hosted on Neon |
 | Background jobs | Celery + Redis |
 | LLM synthesis | OpenAI, Anthropic, Groq, Gemini — BYOK or rate-limited free tier |
-| Auth | OAuth 2.0 (GitHub, Slack, Google for login; GitHub, Slack, Jira for data access — deliberately separate apps, ADR 0003) |
+| Auth | OAuth 2.0 (GitHub, Slack, Google for login; GitHub, Slack, Jira for data access — deliberately separate apps, [ADR 0003](docs/adr/0003-two-token-auth-model.md)) |
 | Frontend | Next.js (App Router), React, TypeScript, Tailwind CSS |
 | Observability | Sentry, structured JSON logging |
 | CI | GitHub Actions — ruff, mypy (strict), pytest with a coverage gate |
 | Hosting | Render (backend + Celery worker), Vercel (frontend), Neon (Postgres) |
 
-## Testing
+## Testing and correctness
 
 ```
-314 tests passing · 94.7% coverage on engine/ + features/ · CI gate at 85%
+314 tests passing · 94.6% coverage on engine/ + features/ · CI gate at 85%
 ```
+(Coverage and test count reflect a real, fresh run of the suite, not a stale figure.)
 
-Split across three kinds, each testing a different thing:
-- **Unit** — mocks connectors/correlation at the boundary, tests each
-  module's own logic (ranking dedup, ticket-key extraction, LLM
-  provider error normalization, etc.).
-- **Integration** — a real Dockerized `pgvector/pgvector:pg16` Postgres,
-  real SQL (hybrid search scoring, `ON CONFLICT` upserts, JSONB
-  filtering) that doesn't run against SQLite.
-- **Differential** — `engine/ranking`'s two strategies (recency vs.
-  frequency) tested against synthetic touch histories designed to make
-  them disagree, so a real behavioral difference is asserted, not just
-  "it returns something."
+Three kinds of test, each checking a different thing:
+- **Unit** — mocks connectors/correlation at the boundary; tests each module's own logic (ranking math, ticket-key extraction, LLM provider error normalization).
+- **Integration** — a real Dockerized `pgvector/pgvector:pg16` Postgres, exercising real SQL (`to_tsvector`, `cosine_distance`, `ON CONFLICT` upserts) that doesn't run against SQLite.
+- **Differential** — `engine/ranking`'s two strategies, tested against synthetic touch histories built specifically to make them disagree (see above), so a real behavioral difference is asserted, not just "it returns something."
 
-## Local development
+CI (`.github/workflows/ci.yml`) runs ruff, `ruff format --check`, `mypy --strict`, and the full suite against a real Postgres+Redis service, failing the build under 85% coverage on `engine/` + `features/`.
 
-**Prerequisites:** Node 22.13+, pnpm, Python 3.12+, [uv](https://docs.astral.sh/uv/),
-Docker (for local Postgres/Redis).
+## Build and run locally
+
+**Prerequisites:** Node 22.13+, pnpm, Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker (for local Postgres/Redis).
 
 ```bash
 # Backend
@@ -185,10 +180,9 @@ uv run --package relay-api uvicorn relay_api.main:app --app-dir apps/api/src --r
 uv run --package relay-api celery -A relay_api.jobs.celery_app worker --loglevel=info
 
 # Celery beat (separate terminal) — re-runs indexing for every connected
-# provider every 15 minutes, so activity that happens *after* the initial
-# connect (a new Slack message, a new commit) eventually becomes
-# searchable too, not just what existed at connect time. The worker above
-# still does the actual work; beat just re-triggers it on a schedule.
+# provider every 15 minutes, so activity that happens after the initial
+# connect eventually becomes searchable too, not just what existed at
+# connect time.
 uv run --package relay-api celery -A relay_api.jobs.celery_app beat --loglevel=info
 
 # Frontend (separate terminal)
@@ -197,72 +191,52 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm --filter @relay/web dev
 ```
 
-Backend runs at `http://localhost:8000`, frontend at `http://localhost:3000`.
-Sign in, then visit `/connections` to connect GitHub/Slack/Jira and
-`/search` to query them once the Celery worker has finished indexing.
+Backend runs at `http://localhost:8000`, frontend at `http://localhost:3000`. Sign in, then visit `/connections` to connect GitHub/Slack/Jira and `/search` to query them once the Celery worker has finished indexing.
 
 ```bash
-uv run --package relay-api pytest apps/api/tests   # backend (needs the pgvector Postgres running + migrated)
-pnpm --filter @relay/web lint                       # frontend lint
+# Backend tests need DATABASE_URL exported to your own container/port if it
+# differs from pytest's CI-matching default (postgresql+asyncpg://relay:relay@localhost:5432/relay_test)
+uv run --package relay-api pytest apps/api/tests
+pnpm --filter @relay/web lint
+```
+
+## Project structure
+
+```
+apps/api/src/relay_api/
+├── main.py               # app wiring only — CORS, router registration
+├── auth/                 # login OAuth (GitHub · Slack · Google)
+├── connectors/            # data-access OAuth + API clients (GitHub · Slack · Jira)
+├── engine/                # shared retrieval/correlation core (see Architecture)
+├── features/              # one router + service per query mode
+└── jobs/                  # Celery app, periodic resync, indexing tasks
+apps/web/                  # Next.js (App Router) frontend
+docs/
+├── adr/                   # technical architecture decisions — what, why, how
+├── decisions/              # product/scope decisions — what got cut and why
+└── phases/                 # a retro per shipped phase, including bugs found live
 ```
 
 ## Deployment
 
-Backend (FastAPI + Celery worker, combined into one process on Render's
-free tier — background workers aren't available below a paid plan, so
-the Celery worker+beat process runs backgrounded inside the same web
-service) on **Render**, frontend on **Vercel**, database on **Neon**
-(serverless Postgres with pgvector). `render.yaml` (repo root) is a live
-Render Blueprint documenting the exact build/start commands and required
-environment variables.
+Backend (FastAPI + Celery worker, combined into one process — Render's free tier has no standalone background-worker service, so the worker+beat process runs backgrounded inside the same web service) on **Render**, frontend on **Vercel**, database on **Neon** (serverless Postgres with pgvector). `render.yaml` (repo root) is a live Render Blueprint documenting the exact build/start commands and environment variables.
 
-Login and data-access OAuth are deliberately separate app registrations
-per provider (ADR 0003) — six OAuth apps total across GitHub, Slack,
-Google, and Jira once both are fully set up. All six register their
-callback URL under the **frontend's** domain, not the backend's — see
-the BFF proxy note below.
+Login and data-access OAuth are deliberately separate app registrations per provider ([ADR 0003](docs/adr/0003-two-token-auth-model.md)) — six OAuth apps total across GitHub, Slack, Google, and Jira. All six register their callback URL under the **frontend's** domain, not the backend's — see the BFF proxy deep-dive above.
 
-**Cross-site cookies, fixed via a BFF proxy (ADR 0024):** the frontend
-never calls the backend's domain directly. `next.config.ts`'s
-`rewrites()` proxies every `/api/v1/*` call server-side to the real
-backend (`BACKEND_API_URL`, a Vercel env var), so from the browser's
-perspective every request — including the OAuth callback that mints the
-session cookie — stays on one site. That's what actually fixes Safari:
-Intelligent Tracking Prevention blocks cross-site cookies on `fetch`/XHR
-regardless of `SameSite=None; Secure`, and no cookie attribute works
-around that — removing the cross-site request is the only fix, which is
-why this replaced an earlier `SameSite=None` workaround rather than
-sitting alongside it.
+## Limitations and explicitly deferred work
 
-**Redis over TLS, and Upstash's request cap (found live, both):** Celery's
-Redis transport refuses to connect over a `rediss://` URL at all without
-an explicit `ssl_cert_reqs` — surfaced as every background job (connector
-connect, manual sync, the periodic resync) failing with a raw 500 in a
-way that looked unrelated to Redis entirely. `jobs/celery_app.py` sets
-this automatically whenever `REDIS_URL` starts with `rediss://`; a plain
-`redis://` URL (local dev) is untouched. Separately: kombu's redis
-transport polls the broker with a 1-second `BRPOP` timeout *by default,
-forever, whether or not any task ever runs* — an always-on worker (kept
-alive by an external uptime ping, since Render's free tier sleeps
-idle web services) burns roughly 86,400 requests/day from idle polling
-alone, which exhausted Upstash's 500,000/month free-tier cap in about a
-week with almost no real task volume. Tuned via `broker_transport_options`
-(`polling_interval`, 30s) and `--without-gossip --without-mingle
---without-heartbeat` on the worker (`render.yaml`) — both cut idle Redis
-traffic substantially without slowing down real task pickup by anything
-that matters at this scale.
+- **One connected account per provider.** A deliberate Phase 1 simplification, not an oversight — documented in `connectors/models.py`.
+- **Ticket-key extraction is a documented heuristic** (a regex over common Jira key shapes), not NLP — see [ADR 0010](docs/adr/0010-live-blame-and-repo-browsing.md). It works well for teams that reference ticket keys in commits/PRs; it has no fallback for teams that don't.
+- **No frontend automated test suite** — CI runs ESLint and `tsc`/`next build` type-checking, not a test runner. Backend correctness is where the test investment went.
+- **A Drift/Stale-Ticket Finder and a Dependency Alert Bot were both scoped and explicitly not built** — the reasoning for each cut is written up in [`docs/decisions/`](docs/decisions/), not just dropped silently.
+- **PR Blast Radius is reachable only through a search hit today** — no way to jump to an arbitrary PR by number if it hasn't already been indexed (same scope line the ticket/PR-first search entry point already carries, see [ADR 0023](docs/adr/0023-pr-blast-radius-entry-point.md)).
 
 ## Documentation
 
-- [`docs/adr/`](docs/adr/) — technical architecture decisions: what,
-  why, how. Written when a real design decision is made, not
-  retroactively.
-- [`docs/decisions/`](docs/decisions/) — product/scope decisions: what
-  got cut or deliberately deferred, and the actual reasoning (not just
-  "out of scope").
-- [`docs/phases/`](docs/phases/) — a retro per shipped phase, including
-  a "found live, not just in review" section for bugs/gaps that only
-  surfaced against real data, not synthetic tests.
+- [`docs/adr/`](docs/adr/) — technical architecture decisions: what, why, how. Written when a real design decision is made, not retroactively.
+- [`docs/decisions/`](docs/decisions/) — product/scope decisions: what got cut or deliberately deferred, and the actual reasoning.
+- [`docs/phases/`](docs/phases/) — a retro per shipped phase, including a "found live, not just in review" section for bugs that only surfaced against real data.
+- [`plan.md`](plan.md) — the original architecture/phase plan this project was built against.
 
 ## License
 
