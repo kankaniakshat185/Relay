@@ -95,7 +95,7 @@ export default function IncidentCorrelationPage() {
     <div>
       <SectionLabel tone="brand">Incident Correlation</SectionLabel>
       <DisplayHeading size="xl" className="text-ink mt-3">
-        What changed before this broke?
+        What broke this?
       </DisplayHeading>
       <p className="text-muted mt-6 max-w-md text-sm leading-relaxed">
         Give Relay a time an incident was noticed. It surfaces everything
