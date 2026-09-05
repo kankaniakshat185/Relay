@@ -4,13 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountDrawer } from "./AccountDrawer";
+import { ThemeToggle } from "./ThemeToggle";
 import { LogoMark } from "./editorial/LogoMark";
 
 // Every query mode stays directly in the header, as it always was — the
 // clutter complaint turned out to be specifically about the account
-// cluster (Connections/theme/name/Sign out) once Connections joined it,
-// not about this list. That cluster now lives behind `AccountDrawer`
-// instead; this row is untouched.
+// cluster (Connections/name/Sign out) once Connections joined it, not
+// about this list. That cluster now lives behind `AccountDrawer`
+// instead; this row is untouched. Theme stays visible in the header
+// itself (not worth a trip into the drawer for something this quick to
+// reach for), so it's the one item `AccountDrawer` doesn't also show.
 const LIVE_ITEMS = [
   { label: "Search", href: "/search" },
   { label: "Archaeology", href: "/archaeology" },
@@ -47,7 +50,10 @@ export function DashboardNav() {
         </nav>
       </div>
 
-      <AccountDrawer />
+      <div className="flex items-center gap-4">
+        <ThemeToggle />
+        <AccountDrawer />
+      </div>
     </header>
   );
 }

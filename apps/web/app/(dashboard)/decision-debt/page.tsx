@@ -84,42 +84,41 @@ export default function DecisionDebtPage() {
 
       <Rule className="mt-16" />
 
-      <div className="mt-8 flex flex-col gap-6 sm:max-w-[496px]">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-          <SectionLabel tone="brand" className="sm:w-16 sm:shrink-0 sm:pt-2">
-            Repo
-          </SectionLabel>
-          <div className="border-line w-full border sm:w-[420px]">
-            {repoStatus === "loading" && (
-              <p className="text-muted px-4 py-3 text-sm">Loading repositories…</p>
-            )}
-            {repoStatus === "error" && (
-              <p className="text-muted px-4 py-3 text-sm">
-                Couldn&rsquo;t load repos — connect GitHub on the Connections page.
-              </p>
-            )}
-            {repos && repos.length === 0 && (
-              <p className="text-muted px-4 py-3 text-sm">No repositories found.</p>
-            )}
-            {repos?.map((repo, i) => (
-              <button
-                key={repo.full_name}
-                type="button"
-                onClick={() => setSelectedRepo(repo)}
-                className={`block w-full px-4 py-2.5 text-left text-sm transition-colors ${
-                  i > 0 ? "border-line border-t" : ""
-                } ${
-                  selectedRepo?.full_name === repo.full_name
-                    ? "bg-ink text-paper"
-                    : "text-ink hover:bg-line/30"
-                }`}
-              >
-                {repo.full_name}
-              </button>
+      <div className="mt-8 w-full lg:w-[60%]">
+        <SectionLabel tone="brand">Repository</SectionLabel>
+        <Rule className="mt-3" />
+        {repoStatus === "error" ? (
+          <p className="text-brand mt-6 text-sm">
+            Couldn&rsquo;t load repos — connect GitHub first.
+          </p>
+        ) : repoStatus === "loading" ? (
+          <p className="text-muted mt-6 text-sm">Loading repositories…</p>
+        ) : repos && repos.length === 0 ? (
+          <p className="text-muted mt-6 text-sm">
+            No repositories found — connect GitHub first.
+          </p>
+        ) : (
+          <ul>
+            {repos?.map((repo) => (
+              <li key={repo.full_name} className="border-line border-b">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRepo(repo)}
+                  className={`w-full py-3 text-left text-sm font-medium transition-colors ${
+                    selectedRepo?.full_name === repo.full_name
+                      ? "text-brand"
+                      : "text-ink hover:text-brand"
+                  }`}
+                >
+                  {repo.full_name}
+                </button>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        )}
+      </div>
 
+      <div className="mt-8 flex flex-col gap-6 sm:max-w-[496px]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <SectionLabel tone="brand" className="sm:w-16 sm:shrink-0">
             Discuss.

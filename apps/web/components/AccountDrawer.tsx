@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useCurrentUser } from "./AuthGuard";
-import { ThemeToggle } from "./ThemeToggle";
 import { Rule } from "./editorial/Rule";
 import { SectionLabel } from "./editorial/SectionLabel";
 import { logout } from "@/lib/auth";
@@ -78,7 +77,9 @@ function CloseIcon({ className }: { className?: string }) {
  * Sign out as large serif rows, each closed off by its own hairline
  * rule — instead of `DashboardNav`'s compact row. That nav stays exactly
  * as it was; this is a second, roomier way to get anywhere, not a
- * replacement for it. */
+ * replacement for it. Theme stays out of this list entirely — it's
+ * visible in the header itself, right beside this drawer's own trigger
+ * button, not worth a trip in here for something reached for that often. */
 export function AccountDrawer() {
   const user = useCurrentUser();
   const router = useRouter();
@@ -149,14 +150,6 @@ export function AccountDrawer() {
             </button>
           </div>
           <p className="text-muted mt-4 text-sm">Signed in as {user.display_name}</p>
-
-          {/* Utility row — theme is a control, not a destination, so it
-              gets Vox's WATCH/LISTEN/PLAY treatment (a single row above
-              the divided list) instead of a list item of its own. */}
-          <div className="mt-8 flex items-center justify-between">
-            <SectionLabel>Theme</SectionLabel>
-            <ThemeToggle />
-          </div>
 
           <Rule className="mt-8" />
 
