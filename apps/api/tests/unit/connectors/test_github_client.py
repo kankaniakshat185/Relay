@@ -110,3 +110,57 @@ async def test_get_workflow_run_attempt_returns_the_raw_response() -> None:
         result = await client.get_workflow_run_attempt("token", "acme", "widgets", 1, 1)
 
     assert result == body
+
+
+async def test_get_file_content_decodes_the_base64_body() -> None:
+    import base64
+
+    body = {
+        "type": "file",
+        "content": base64.b64encode(b"# ADR 0001: Use Postgres\n\nBecause it's boring.").decode(),
+    }
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response(body))):
+        result = await client.get_file_content("token", "acme", "widgets", "docs/adr/0001.md")
+
+    assert result == "# ADR 0001: Use Postgres\n\nBecause it's boring."
+
+
+async def test_get_file_content_returns_none_for_a_404() -> None:
+    with patch.object(
+        client.httpx, "AsyncClient", return_value=_mock_client(_response({}, status_code=404))
+    ):
+        result = await client.get_file_content("token", "acme", "widgets", "docs/adr")
+
+    assert result is None
+
+
+async def test_get_file_content_returns_none_for_a_directory() -> None:
+    # GitHub returns a bare list, not a `{"type": "file", ...}` object,
+    # when `path` points at a directory instead of a file.
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response([]))):
+        result = await client.get_file_content("token", "acme", "widgets", "docs/adr")
+
+    assert result is None
+
+
+async def test_get_latest_commit_for_path_returns_the_first_result() -> None:
+    body = [
+        {"sha": "newest", "commit": {"author": {"date": "2026-01-01T00:00:00Z"}}},
+        {"sha": "older", "commit": {"author": {"date": "2025-01-01T00:00:00Z"}}},
+    ]
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response(body))):
+        result = await client.get_latest_commit_for_path(
+            "token", "acme", "widgets", "docs/adr/0001.md"
+        )
+
+    assert result is not None
+    assert result["sha"] == "newest"
+
+
+async def test_get_latest_commit_for_path_returns_none_when_no_commits() -> None:
+    with patch.object(client.httpx, "AsyncClient", return_value=_mock_client(_response([]))):
+        result = await client.get_latest_commit_for_path(
+            "token", "acme", "widgets", "docs/adr/gone.md"
+        )
+
+    assert result is None

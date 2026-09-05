@@ -23,6 +23,7 @@ from relay_api.engine.code_context.service import CodeContextError
 from relay_api.engine.indexing.embeddings import EmbeddingUnavailableError
 from relay_api.features.archaeology.router import router as archaeology_router
 from relay_api.features.context_search.router import router as context_search_router
+from relay_api.features.decision_debt.router import router as decision_debt_router
 from relay_api.features.flaky_tests.router import router as flaky_tests_router
 from relay_api.features.incident_correlation.router import router as incident_correlation_router
 from relay_api.features.notes.router import router as notes_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     v1.include_router(notes_router)
     v1.include_router(weekly_digest_router)
     v1.include_router(incident_correlation_router)
+    v1.include_router(decision_debt_router)
     app.include_router(v1)
 
     @app.get("/healthz", tags=["health"])

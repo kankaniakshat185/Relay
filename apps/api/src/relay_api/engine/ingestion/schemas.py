@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Any, Literal
 
 Source = Literal["github", "slack", "jira", "notes"]
-SourceType = Literal["pull_request", "commit", "message", "issue", "review_comment", "note"]
+SourceType = Literal[
+    "pull_request", "commit", "message", "issue", "review_comment", "note", "decision_doc"
+]
 """`"review_comment"` covers both a PR's top-level review verdicts
 (APPROVED/CHANGES_REQUESTED/COMMENTED, with a body) and inline code
 comments — one type, not two, since both are "commentary during code

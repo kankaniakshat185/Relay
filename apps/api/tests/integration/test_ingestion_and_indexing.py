@@ -94,6 +94,47 @@ async def test_index_then_search_finds_the_item(db: AsyncSession, test_user: Use
     assert any(r.external_id == "3" for r in results)
 
 
+async def test_search_source_types_narrows_within_a_source(
+    db: AsyncSession, test_user: User
+) -> None:
+    # Both `source="github"` — `sources=["github"]` alone can't tell them
+    # apart; `source_types` is what `engine.correlation.find_related`
+    # threads through for `features/decision_debt` (ADR 0027).
+    pr = NormalizedItem(
+        source="github",
+        source_type="pull_request",
+        external_id="pr-src-type",
+        title="Retry logic bug",
+        body="Retry logic bug",
+        url="https://github.com/acme/widgets/pull/9",
+        author="octocat",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    doc = NormalizedItem(
+        source="github",
+        source_type="decision_doc",
+        external_id="decision-doc-src-type",
+        title="Retry logic bug",
+        body="Retry logic bug",
+        url="https://github.com/acme/widgets/blob/HEAD/docs/adr/0002.md",
+        author="octocat",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    await ingestion_service.upsert_items(db, test_user.id, [pr, doc])
+    to_index = await ingestion_service.get_items_needing_indexing(db, test_user.id)
+
+    async def _fake_embed(texts: list[str]) -> list[list[float]]:
+        return [_FAKE_VECTOR for _ in texts]
+
+    with patch.object(indexing_service, "embed_texts", new=_fake_embed):
+        await indexing_service.index_items(db, to_index)
+        results = await indexing_service.search(
+            db, test_user.id, "retry logic", sources=["github"], source_types=["decision_doc"]
+        )
+
+    assert {r.external_id for r in results} == {"decision-doc-src-type"}
+
+
 async def test_search_is_scoped_to_the_requesting_user(db: AsyncSession, test_user: User) -> None:
     # Randomized, not a fixed address — this insert commits durably (see
     # below), so a fixed email breaks on the second run against a

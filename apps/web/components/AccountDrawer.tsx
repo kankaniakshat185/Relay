@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { label: "Notes", href: "/notes" },
   { label: "Weekly Digest", href: "/weekly-digest" },
   { label: "Incidents", href: "/incident-correlation" },
+  { label: "Decision Debt", href: "/decision-debt" },
 ] as const;
 
 const PROVIDER_LABELS: Record<ConnectorProvider, string> = {

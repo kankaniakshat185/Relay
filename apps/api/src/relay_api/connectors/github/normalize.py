@@ -1,8 +1,11 @@
+import re
 from datetime import datetime
 from typing import Any
 
 from relay_api.connectors.text_utils import truncate_title
 from relay_api.engine.ingestion.schemas import NormalizedItem
+
+_MARKDOWN_H1_PATTERN = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 
 
 def normalize_pull_request(pr: dict[str, Any], repo_full_name: str) -> NormalizedItem:
@@ -74,6 +77,46 @@ def normalize_review_comment(
             "kind": "comment",
             "path": path,
         },
+    )
+
+
+def _decision_doc_title(content: str, path: str) -> str:
+    """The first Markdown H1 (`# ADR 0005: ...`) if there is one — the
+    convention every ADR/decision doc in this project's own repo follows
+    — otherwise the filename. A missing H1 isn't an error; plenty of
+    real teams' decision docs are looser than that."""
+    match = _MARKDOWN_H1_PATTERN.search(content)
+    if match:
+        return match.group(1).strip()
+    return path.rsplit("/", 1)[-1]
+
+
+def normalize_decision_doc(
+    *,
+    path: str,
+    content: str,
+    repo_full_name: str,
+    html_url: str,
+    author: str | None,
+    occurred_at: datetime,
+) -> NormalizedItem:
+    """One markdown file from a repo's decision-doc folder (`docs/adr/`,
+    `docs/decisions/`, `adr/`, or `decisions/` — see
+    `connectors/github/ingest.py`'s `_DECISION_DOC_FOLDERS`). A new
+    `source_type` distinct from `pull_request`/`commit`/`review_comment` —
+    a decision doc isn't a record of a change, it's a record of *why* one
+    was made, which is exactly what `features/decision_debt` correlates
+    PRs against to tell "documented" from "undocumented" apart."""
+    return NormalizedItem(
+        source="github",
+        source_type="decision_doc",
+        external_id=f"decision-doc:{repo_full_name}:{path}",
+        title=truncate_title(_decision_doc_title(content, path)),
+        body=content,
+        url=html_url,
+        author=author,
+        occurred_at=occurred_at,
+        extra={"repo": repo_full_name, "path": path},
     )
 
 

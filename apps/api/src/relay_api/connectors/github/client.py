@@ -2,6 +2,7 @@
 scope in plan.md §5, even though the OAuth `repo` scope itself permits more
 (see `provider.py`)."""
 
+import base64
 from typing import Any
 
 import httpx
@@ -77,6 +78,51 @@ async def list_directory_contents(
         # a file rather than a directory — callers only browse directories.
         entries: list[dict[str, Any]] = data if isinstance(data, list) else [data]
         return entries
+
+
+async def get_file_content(access_token: str, owner: str, repo: str, path: str) -> str | None:
+    """Decoded text content of a single file at the repo's default
+    branch — the same `/contents/{path}` endpoint `list_directory_contents`
+    uses, but decoding the `content` field that only shows up when `path`
+    points at a file (directory listings never carry it). Used for
+    ingesting decision-doc markdown, not live browsing.
+
+    Returns `None` for a 404 (path doesn't exist) or a directory — the
+    caller is probing candidate decision-doc folders that most repos
+    won't have, so "doesn't exist" is an expected outcome, not an error."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/contents/{path}",
+            headers=_headers(access_token),
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict) or data.get("type") != "file":
+            return None
+        content_b64: str = data.get("content", "")
+        return base64.b64decode(content_b64).decode("utf-8", errors="replace")
+
+
+async def get_latest_commit_for_path(
+    access_token: str, owner: str, repo: str, path: str
+) -> dict[str, Any] | None:
+    """Most recent commit that touched `path` — GitHub's Contents API
+    (`get_file_content` above) returns the blob itself, not commit
+    history, so dating/attributing a decision doc needs this separate
+    call. `None` if the path has no commit history GitHub will return
+    (shouldn't happen for a file `get_file_content` just confirmed
+    exists, but a repo with a truncated/rewritten history is possible)."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{_API_BASE}/repos/{owner}/{repo}/commits",
+            headers=_headers(access_token),
+            params={"path": path, "per_page": 1},
+        )
+        response.raise_for_status()
+        commits: list[dict[str, Any]] = response.json()
+        return commits[0] if commits else None
 
 
 async def list_workflow_runs(

@@ -3,6 +3,9 @@
 should reach into `client.py`/`normalize.py` directly."""
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+
+import httpx
 
 from relay_api.connectors.github import client, normalize
 from relay_api.engine.ingestion.schemas import NormalizedItem
@@ -45,10 +48,78 @@ account's repo count grows substantially — these aren't derived from a
 formula that self-adjusts."""
 
 
+_DECISION_DOC_FOLDERS = ["docs/adr", "docs/decisions", "adr", "decisions"]
+"""Common ADR/decision-doc folder conventions — this project's own repo
+uses the first two; `adr/`/`decisions/` at the repo root are the other
+widely-used shape (Michael Nygard's original ADR post popularized both).
+Not configurable per-repo (no `.prscope.yml`-style config file) — a
+fixed, documented allowlist, same tradeoff `_TICKET_KEY_PATTERN` already
+makes: covers the common case, doesn't try to be a general solution for
+every team's own doc layout."""
+
+_MAX_DECISION_DOCS_PER_FOLDER = 50
+"""A real per-call cost, same reasoning as `_REVIEW_FETCH_LIMIT` below:
+each doc costs two extra requests (content + latest-commit). 50 is far
+above what any real team's decision-doc folder holds in practice — this
+guards against a misconfigured/oversized match (e.g. `decisions/` being
+someone's actual data directory), not a real doc count."""
+
+
+async def _fetch_decision_docs(
+    access_token: str, owner: str, name: str, repo_full_name: str
+) -> list[NormalizedItem]:
+    """Probes each of `_DECISION_DOC_FOLDERS` for markdown files — most
+    repos have none of these folders, which is an expected outcome (a
+    404), not an error worth failing the whole repo's sync over."""
+    items: list[NormalizedItem] = []
+
+    for folder in _DECISION_DOC_FOLDERS:
+        try:
+            entries = await client.list_directory_contents(access_token, owner, name, folder)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                continue
+            raise
+
+        md_paths = [
+            e["path"] for e in entries if e.get("type") == "file" and e["name"].endswith(".md")
+        ]
+        for path in md_paths[:_MAX_DECISION_DOCS_PER_FOLDER]:
+            content = await client.get_file_content(access_token, owner, name, path)
+            if content is None:
+                continue
+
+            latest_commit = await client.get_latest_commit_for_path(access_token, owner, name, path)
+            if latest_commit is not None:
+                commit_author = (latest_commit.get("author") or {}).get("login")
+                commit_date = latest_commit["commit"]["author"]["date"]
+                occurred_at = datetime.fromisoformat(commit_date.replace("Z", "+00:00"))
+            else:
+                # No commit history GitHub will return for this path
+                # (unusual, but not impossible — a truncated/rewritten
+                # history) — dated "now" rather than left unindexable.
+                commit_author, occurred_at = None, datetime.now(UTC)
+
+            html_url = f"https://github.com/{repo_full_name}/blob/HEAD/{path}"
+            items.append(
+                normalize.normalize_decision_doc(
+                    path=path,
+                    content=content,
+                    repo_full_name=repo_full_name,
+                    html_url=html_url,
+                    author=commit_author,
+                    occurred_at=occurred_at,
+                )
+            )
+
+    return items
+
+
 async def iter_normalized_items_by_repo(access_token: str) -> AsyncIterator[list[NormalizedItem]]:
     """Same fetch/normalize work as `fetch_normalized_items`, but yields one
     connected repo's items at a time instead of accumulating every repo's
-    PRs/reviews/comments/commits into one list before returning anything.
+    PRs/reviews/comments/commits/decision-docs into one list before
+    returning anything.
 
     Found live: an account with several active repos produced enough
     in-memory `NormalizedItem`s (worst case ~801 API responses' worth,
@@ -90,6 +161,8 @@ async def iter_normalized_items_by_repo(access_token: str) -> AsyncIterator[list
             access_token, owner, name, limit=_COMMIT_LIMIT_PER_REPO
         )
         items.extend(normalize.normalize_commit(commit, repo["full_name"]) for commit in commits)
+
+        items.extend(await _fetch_decision_docs(access_token, owner, name, repo["full_name"]))
 
         yield items
 

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from relay_api.connectors.github.normalize import (
     normalize_commit,
+    normalize_decision_doc,
     normalize_pull_request,
     normalize_review,
     normalize_review_comment,
@@ -236,3 +237,58 @@ def test_review_and_review_comment_external_ids_never_collide() -> None:
 
     assert review_item is not None
     assert review_item.external_id != comment_item.external_id
+
+
+def test_normalizes_a_decision_doc_using_its_own_h1_as_title() -> None:
+    item = normalize_decision_doc(
+        path="docs/adr/0001-use-postgres.md",
+        content="# ADR 0001: Use Postgres\n\nBecause it's boring and well-understood.",
+        repo_full_name="acme/widgets",
+        html_url="https://github.com/acme/widgets/blob/HEAD/docs/adr/0001-use-postgres.md",
+        author="octocat",
+        occurred_at=datetime(2026, 1, 15, tzinfo=UTC),
+    )
+
+    assert item.source == "github"
+    assert item.source_type == "decision_doc"
+    assert item.title == "ADR 0001: Use Postgres"
+    assert item.author == "octocat"
+    assert item.extra == {"repo": "acme/widgets", "path": "docs/adr/0001-use-postgres.md"}
+
+
+def test_decision_doc_falls_back_to_the_filename_when_theres_no_h1() -> None:
+    item = normalize_decision_doc(
+        path="decisions/no-heading.md",
+        content="Just some prose, no markdown heading at all.",
+        repo_full_name="acme/widgets",
+        html_url="https://github.com/acme/widgets/blob/HEAD/decisions/no-heading.md",
+        author=None,
+        occurred_at=datetime(2026, 1, 15, tzinfo=UTC),
+    )
+
+    assert item.title == "no-heading.md"
+    assert item.author is None
+
+
+def test_decision_doc_external_id_is_stable_and_scoped_to_the_repo() -> None:
+    # Two repos could both have a docs/adr/0001.md — the external_id must
+    # not collide between them, since dedupe is per (user, source,
+    # source_type, external_id), not per path alone.
+    item_a = normalize_decision_doc(
+        path="docs/adr/0001.md",
+        content="# One",
+        repo_full_name="acme/widgets",
+        html_url="https://github.com/acme/widgets/blob/HEAD/docs/adr/0001.md",
+        author=None,
+        occurred_at=datetime(2026, 1, 15, tzinfo=UTC),
+    )
+    item_b = normalize_decision_doc(
+        path="docs/adr/0001.md",
+        content="# One",
+        repo_full_name="acme/other-repo",
+        html_url="https://github.com/acme/other-repo/blob/HEAD/docs/adr/0001.md",
+        author=None,
+        occurred_at=datetime(2026, 1, 15, tzinfo=UTC),
+    )
+
+    assert item_a.external_id != item_b.external_id

@@ -69,7 +69,16 @@ const FEATURES = [
       "Give Relay a time an incident was noticed — it surfaces everything across GitHub, Slack, Jira, and Notes around that window, and, if you name a file, that file's own commit history filtered to it.",
     status: "live" as const,
     href: "/incident-correlation",
-    span: "md:col-span-12",
+    span: "md:col-span-5",
+  },
+  {
+    n: "08",
+    title: "Decision Debt",
+    description:
+      "Flags pull requests with real Slack or Jira discussion behind them but no correlated decision doc — and whether the author is even still around to ask.",
+    status: "live" as const,
+    href: "/decision-debt",
+    span: "md:col-span-7",
   },
 ];
 

@@ -87,9 +87,9 @@ def build_jira_ticket_url(site_url: str | None, ticket_key: str) -> str | None:
 
 def _to_related_item(item: IngestedItem) -> RelatedItem:
     # `IngestedItem.source` is a plain str column (any connector could
-    # write it); narrowing to the two sources this module's callers ever
-    # pass into `sources=` is safe here, not a general assumption.
-    source = cast(Literal["slack", "jira"], item.source)
+    # write it); narrowing to the three sources this module's callers
+    # ever pass into `sources=` is safe here, not a general assumption.
+    source = cast(Literal["slack", "jira", "github"], item.source)
     return RelatedItem(
         source=source,
         title=item.title,
@@ -100,7 +100,13 @@ def _to_related_item(item: IngestedItem) -> RelatedItem:
 
 
 async def _find_exact_ticket_key_matches(
-    db: AsyncSession, user_id: uuid.UUID, ticket_key: str, *, sources: list[str], limit: int
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    ticket_key: str,
+    *,
+    sources: list[str],
+    source_types: list[str] | None,
+    limit: int,
 ) -> list[RelatedItem]:
     """A literal substring match on the ticket key — bypasses
     `_MIN_RELEVANCE_SCORE` (and `search()`'s hybrid scoring entirely)
@@ -111,16 +117,18 @@ async def _find_exact_ticket_key_matches(
     Also catches items that haven't been embedded yet (`search()` requires
     `embedding IS NOT NULL`) — a fresh mention shouldn't be invisible just
     because indexing hasn't caught up to it."""
-    pattern = f"%{ticket_key}%"
+    filters = [
+        IngestedItem.user_id == user_id,
+        IngestedItem.source.in_(sources),
+        or_(
+            IngestedItem.title.ilike(f"%{ticket_key}%"), IngestedItem.body.ilike(f"%{ticket_key}%")
+        ),
+    ]
+    if source_types:
+        filters.append(IngestedItem.source_type.in_(source_types))
+
     result = await db.execute(
-        select(IngestedItem)
-        .where(
-            IngestedItem.user_id == user_id,
-            IngestedItem.source.in_(sources),
-            or_(IngestedItem.title.ilike(pattern), IngestedItem.body.ilike(pattern)),
-        )
-        .order_by(IngestedItem.occurred_at.desc())
-        .limit(limit)
+        select(IngestedItem).where(*filters).order_by(IngestedItem.occurred_at.desc()).limit(limit)
     )
     return [_to_related_item(item) for item in result.scalars().all()]
 
@@ -131,13 +139,20 @@ async def find_related(
     query: str | None,
     *,
     sources: list[str],
+    source_types: list[str] | None = None,
     limit: int = _DEFAULT_RELATED_LIMIT,
 ) -> list[RelatedItem]:
     """Generic "find items related to this text" — Archaeology/Who Should
     I Ask use this scoped to `sources=["slack"]` for discussion related to
     a ticket, and `find_similar_jira_issues` below builds on it scoped to
     `["jira"]` for similar past issues. One retrieval path (Phase 1's
-    hybrid search), two callers, not two implementations.
+    hybrid search), multiple callers, not multiple implementations.
+
+    `source_types` narrows further within `sources` — added for
+    `features/decision_debt` (ADR 0027) to correlate a PR against
+    `sources=["github"], source_types=["decision_doc"]` specifically,
+    since `sources` alone can't distinguish a decision doc from any other
+    GitHub-sourced item.
 
     When `query` is itself exactly a ticket key (not free text like a PR
     title, and not the longer title+body query `find_similar_jira_issues`
@@ -149,13 +164,19 @@ async def find_related(
         return []
 
     items = await engine_search(
-        db, user_id, query, sources=sources, limit=limit, min_score=_MIN_RELEVANCE_SCORE
+        db,
+        user_id,
+        query,
+        sources=sources,
+        source_types=source_types,
+        limit=limit,
+        min_score=_MIN_RELEVANCE_SCORE,
     )
     related = [_to_related_item(item) for item in items]
 
     if _TICKET_KEY_PATTERN.fullmatch(query):
         exact_matches = await _find_exact_ticket_key_matches(
-            db, user_id, query, sources=sources, limit=limit
+            db, user_id, query, sources=sources, source_types=source_types, limit=limit
         )
         seen_urls = {m.url for m in exact_matches}
         related = exact_matches + [r for r in related if r.url not in seen_urls]

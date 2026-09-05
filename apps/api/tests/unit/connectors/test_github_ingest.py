@@ -1,9 +1,13 @@
 """`connectors/github/ingest.py` orchestrates client calls into normalized
 items — these tests mock `client` directly and check the `_REVIEW_FETCH_LIMIT`
-cap (ADR 0016), the one piece of real logic in this module beyond
-straight pass-through."""
+cap (ADR 0016) and decision-doc discovery (ADR 0027), the real logic in
+this module beyond straight pass-through."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
 
 from relay_api.connectors.github import ingest
 
@@ -52,6 +56,7 @@ async def test_fetches_review_data_only_for_the_most_recently_updated_prs() -> N
             ingest.client, "list_pr_review_comments", new=AsyncMock(return_value=[])
         ) as mock_comments,
         patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", new=AsyncMock(return_value=[])),
     ):
         await ingest.fetch_normalized_items("token")
 
@@ -85,6 +90,7 @@ async def test_review_and_comment_items_carry_the_matching_pr_number() -> None:
             ),
         ),
         patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", new=AsyncMock(return_value=[])),
     ):
         items = await ingest.fetch_normalized_items("token")
 
@@ -111,7 +117,122 @@ async def test_empty_body_reviews_are_dropped_from_ingested_items() -> None:
         patch.object(ingest.client, "list_pr_reviews", new=AsyncMock(return_value=[empty_review])),
         patch.object(ingest.client, "list_pr_review_comments", new=AsyncMock(return_value=[])),
         patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", new=AsyncMock(return_value=[])),
     ):
         items = await ingest.fetch_normalized_items("token")
 
     assert not any(i.source_type == "review_comment" for i in items)
+
+
+def _http_404() -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://api.github.com/repos/acme/widgets/contents/adr")
+    response = httpx.Response(404, request=request)
+    return httpx.HTTPStatusError("not found", request=request, response=response)
+
+
+async def test_decision_docs_a_404_folder_is_skipped_not_an_error() -> None:
+    with (
+        patch.object(ingest.client, "list_recent_repos", new=AsyncMock(return_value=[_repo()])),
+        patch.object(ingest.client, "list_recent_pull_requests", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(
+            ingest.client, "list_directory_contents", new=AsyncMock(side_effect=_http_404())
+        ),
+    ):
+        # None of the four candidate folders exist — every probe 404s.
+        # Should return cleanly with zero decision docs, not raise.
+        items = await ingest.fetch_normalized_items("token")
+
+    assert not any(i.source_type == "decision_doc" for i in items)
+
+
+async def test_decision_docs_a_non_404_error_still_propagates() -> None:
+    request = httpx.Request("GET", "https://api.github.com/repos/acme/widgets/contents/adr")
+    server_error = httpx.HTTPStatusError(
+        "server error", request=request, response=httpx.Response(500, request=request)
+    )
+    with (
+        patch.object(ingest.client, "list_recent_repos", new=AsyncMock(return_value=[_repo()])),
+        patch.object(ingest.client, "list_recent_pull_requests", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(
+            ingest.client, "list_directory_contents", new=AsyncMock(side_effect=server_error)
+        ),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        await ingest.fetch_normalized_items("token")
+
+
+async def test_decision_docs_only_markdown_files_are_fetched() -> None:
+    entries = [
+        {"name": "0001-use-postgres.md", "path": "docs/adr/0001-use-postgres.md", "type": "file"},
+        {"name": "template.txt", "path": "docs/adr/template.txt", "type": "file"},
+        {"name": "images", "path": "docs/adr/images", "type": "dir"},
+    ]
+
+    async def list_dir_side_effect(_token, _owner, _name, folder):
+        return entries if folder == "docs/adr" else []
+
+    with (
+        patch.object(ingest.client, "list_recent_repos", new=AsyncMock(return_value=[_repo()])),
+        patch.object(ingest.client, "list_recent_pull_requests", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", side_effect=list_dir_side_effect),
+        patch.object(
+            ingest.client, "get_file_content", new=AsyncMock(return_value="# An ADR")
+        ) as mock_content,
+        patch.object(ingest.client, "get_latest_commit_for_path", new=AsyncMock(return_value=None)),
+    ):
+        items = await ingest.fetch_normalized_items("token")
+
+    mock_content.assert_awaited_once_with(
+        "token", "acme", "widgets", "docs/adr/0001-use-postgres.md"
+    )
+    decision_docs = [i for i in items if i.source_type == "decision_doc"]
+    assert len(decision_docs) == 1
+
+
+async def test_decision_docs_use_the_latest_commits_author_and_date() -> None:
+    entries = [{"name": "0001.md", "path": "docs/adr/0001.md", "type": "file"}]
+
+    async def list_dir_side_effect(_token, _owner, _name, folder):
+        return entries if folder == "docs/adr" else []
+
+    latest_commit = {
+        "author": {"login": "carol"},
+        "commit": {"author": {"date": "2026-02-01T00:00:00Z"}},
+    }
+
+    with (
+        patch.object(ingest.client, "list_recent_repos", new=AsyncMock(return_value=[_repo()])),
+        patch.object(ingest.client, "list_recent_pull_requests", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", side_effect=list_dir_side_effect),
+        patch.object(ingest.client, "get_file_content", new=AsyncMock(return_value="# ADR")),
+        patch.object(
+            ingest.client, "get_latest_commit_for_path", new=AsyncMock(return_value=latest_commit)
+        ),
+    ):
+        items = await ingest.fetch_normalized_items("token")
+
+    doc = next(i for i in items if i.source_type == "decision_doc")
+    assert doc.author == "carol"
+    assert doc.occurred_at == datetime(2026, 2, 1, tzinfo=UTC)
+
+
+async def test_decision_docs_a_file_that_disappears_between_listing_and_fetch_is_skipped() -> None:
+    entries = [{"name": "0001.md", "path": "docs/adr/0001.md", "type": "file"}]
+
+    async def list_dir_side_effect(_token, _owner, _name, folder):
+        return entries if folder == "docs/adr" else []
+
+    with (
+        patch.object(ingest.client, "list_recent_repos", new=AsyncMock(return_value=[_repo()])),
+        patch.object(ingest.client, "list_recent_pull_requests", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_recent_commits", new=AsyncMock(return_value=[])),
+        patch.object(ingest.client, "list_directory_contents", side_effect=list_dir_side_effect),
+        patch.object(ingest.client, "get_file_content", new=AsyncMock(return_value=None)),
+    ):
+        items = await ingest.fetch_normalized_items("token")
+
+    assert not any(i.source_type == "decision_doc" for i in items)

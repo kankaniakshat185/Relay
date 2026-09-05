@@ -12,6 +12,7 @@ const PRODUCT = [
   { label: "Notes", href: "/notes" },
   { label: "Weekly Digest", href: "/weekly-digest" },
   { label: "Incident Correlation", href: "/incident-correlation" },
+  { label: "Decision Debt", href: "/decision-debt" },
   { label: "Connections", href: "/connections" },
 ];
 const ELSEWHERE = [

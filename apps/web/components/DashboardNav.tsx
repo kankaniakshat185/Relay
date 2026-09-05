@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import { AccountDrawer } from "./AccountDrawer";
 import { LogoMark } from "./editorial/LogoMark";
 
-// The seven query modes stay directly in the header, as they always
-// were — the clutter complaint turned out to be specifically about the
-// account cluster (Connections/theme/name/Sign out) once Connections
-// joined it, not about this list. That cluster now lives behind
-// `AccountDrawer` instead; this row is untouched.
+// Every query mode stays directly in the header, as it always was — the
+// clutter complaint turned out to be specifically about the account
+// cluster (Connections/theme/name/Sign out) once Connections joined it,
+// not about this list. That cluster now lives behind `AccountDrawer`
+// instead; this row is untouched.
 const LIVE_ITEMS = [
   { label: "Search", href: "/search" },
   { label: "Archaeology", href: "/archaeology" },
@@ -19,6 +19,7 @@ const LIVE_ITEMS = [
   { label: "Notes", href: "/notes" },
   { label: "Weekly Digest", href: "/weekly-digest" },
   { label: "Incidents", href: "/incident-correlation" },
+  { label: "Decision Debt", href: "/decision-debt" },
 ] as const;
 
 export function DashboardNav() {

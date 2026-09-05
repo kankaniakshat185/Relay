@@ -12,13 +12,14 @@ from typing import Literal
 @dataclass(frozen=True)
 class RelatedItem:
     """A retrieved item related to whatever the caller was correlating
-    against — a Slack message discussing a ticket, or a past Jira issue
-    similar to the current one. Deliberately source-agnostic: the shape
-    was always the same for both (Build 1, ADR 0014) — only the query and
-    which `sources` `engine.indexing.service.search` was scoped to
-    differed, which is a caller concern, not a shape concern."""
+    against — a Slack message discussing a ticket, a past Jira issue
+    similar to the current one, or (ADR 0027) a decision doc correlated
+    against a PR. Deliberately source-agnostic: the shape was always the
+    same regardless (Build 1, ADR 0014) — only the query and which
+    `sources`/`source_types` `engine.indexing.service.search` was scoped
+    to differed, which is a caller concern, not a shape concern."""
 
-    source: Literal["slack", "jira"]
+    source: Literal["slack", "jira", "github"]
     title: str
     url: str
     excerpt: str

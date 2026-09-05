@@ -69,9 +69,18 @@ async def search(
     *,
     limit: int = 10,
     sources: list[str] | None = None,
+    source_types: list[str] | None = None,
     min_score: float | None = None,
 ) -> list[IngestedItem]:
     """Hybrid keyword + vector search, scoped to one user's ingested items.
+
+    `sources` filters the `source` column (github/slack/jira/notes);
+    `source_types` filters `source_type` (pull_request/commit/message/...)
+    — independent filters, both optional, combined with AND when both are
+    given. Added for `features/decision_debt` (ADR 0027), which needs to
+    search *within* `source="github"` for specifically `source_type=
+    "decision_doc"` — `sources` alone can't express that, since every
+    other GitHub source_type would match it too.
 
     `min_score`, if set, drops candidates below that combined score
     instead of always returning up to `limit` results regardless of how
@@ -97,6 +106,8 @@ async def search(
     )
     if sources:
         stmt = stmt.where(IngestedItem.source.in_(sources))
+    if source_types:
+        stmt = stmt.where(IngestedItem.source_type.in_(source_types))
     if min_score is not None:
         stmt = stmt.where(combined_score >= min_score)
 

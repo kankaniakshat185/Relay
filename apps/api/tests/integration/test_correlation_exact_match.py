@@ -81,6 +81,54 @@ async def test_an_exact_ticket_key_mention_surfaces_despite_a_weak_vector_score(
     assert [r.url for r in result] == [message.url]
 
 
+async def test_source_types_narrows_within_a_source_not_just_across_sources(
+    db: AsyncSession, test_user: User
+) -> None:
+    """`sources=["github"]` alone matches a PR and a decision doc equally
+    (both are `source="github"`) — `source_types` is what `decision_debt`
+    (ADR 0027) needs to tell them apart. Both items exact-match the same
+    ticket key, so this exercises `_find_exact_ticket_key_matches`'s own
+    `source_types` filter, not just `search()`'s."""
+    pr = NormalizedItem(
+        source="github",
+        source_type="pull_request",
+        external_id="pr-1",
+        title="REL-42: fix retry logic",
+        body="REL-42: fix retry logic",
+        url="https://github.com/acme/widgets/pull/1",
+        author="octocat",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    decision_doc = NormalizedItem(
+        source="github",
+        source_type="decision_doc",
+        external_id="decision-doc:acme/widgets:docs/adr/0001.md",
+        title="ADR 0001: retry strategy (REL-42)",
+        body="Documents the decision behind REL-42's retry strategy.",
+        url="https://github.com/acme/widgets/blob/HEAD/docs/adr/0001.md",
+        author="octocat",
+        occurred_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    await ingestion_service.upsert_items(db, test_user.id, [pr, decision_doc])
+    to_index = await ingestion_service.get_items_needing_indexing(db, test_user.id)
+
+    async def _fake_embed(texts: list[str]) -> list[list[float]]:
+        return [_FAR_VECTOR for _ in texts]
+
+    with patch.object(indexing_service, "embed_texts", new=_fake_embed):
+        await indexing_service.index_items(db, to_index)
+
+        async def _fake_query_embed(texts: list[str]) -> list[list[float]]:
+            return [_QUERY_VECTOR for _ in texts]
+
+        with patch.object(indexing_service, "embed_texts", new=_fake_query_embed):
+            result = await correlation_service.find_related(
+                db, test_user.id, "REL-42", sources=["github"], source_types=["decision_doc"]
+            )
+
+    assert [r.url for r in result] == [decision_doc.url]
+
+
 async def test_unrelated_content_with_no_exact_match_still_gets_filtered(
     db: AsyncSession, test_user: User
 ) -> None:
