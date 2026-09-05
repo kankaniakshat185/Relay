@@ -1,7 +1,7 @@
 <h1 align="center">Relay</h1>
 
 
-A shared context engine that correlates GitHub, Slack, and Jira — six purpose-built query interfaces on **one** retrieval/correlation engine, not six disconnected integrations.
+A shared context engine that correlates GitHub, Slack, and Jira — eight purpose-built query interfaces on **one** retrieval/correlation engine, not eight disconnected integrations.
 
 > "Who should I ask about `payments/retry.py`?" → Relay ranks contributors by commit recency and frequency, credits a reviewer who commented but never committed a line, and surfaces the Slack thread and Jira ticket tied to the same file.
 
@@ -17,6 +17,8 @@ A shared context engine that correlates GitHub, Slack, and Jira — six purpose-
 | **Flaky Test Investigator** | Flags flaky vs. genuinely broken GitHub Actions workflows from real per-attempt outcomes, with a documented heuristic fallback where ground truth isn't available. |
 | **Notes** | Freeform, or attached to a commit/PR/ticket/Slack message — indexed like every other source, so notes surface in Context Search too. |
 | **Weekly Digest** | A time window instead of a keyword: everything across GitHub, Slack, Jira, and Notes in the last N days, optionally synthesized into shipped / in-progress / unresolved. |
+| **Incident Correlation** | Give it a timestamp and a window; it surfaces everything ingested around that time, plus — if you name a file — that file's own correlated commit history filtered to the same window. |
+| **Decision Debt** | Flags pull requests with real correlated Slack/Jira discussion but no correlated decision doc, and whether the PR's author still shows any recent activity at all. |
 
 ## How it works
 
@@ -40,6 +42,8 @@ flowchart TB
             FT["flaky_tests"]
             Notes["notes"]
             WD["weekly_digest"]
+            IC["incident_correlation"]
+            DD["decision_debt"]
         end
 
         subgraph Engine["engine/ — shared retrieval & correlation core"]
@@ -50,6 +54,7 @@ flowchart TB
             Ranking["ranking<br/>differential-tested"]
             CodeContext["code_context<br/>live git blame"]
             CodeSearch["code_search"]
+            Timeline["timeline<br/>correlated commit history"]
             Synthesis["synthesis<br/>BYOK / free-tier LLM"]
         end
     end
@@ -78,9 +83,11 @@ flowchart TB
 **Tested by real feature work, not just asserted:**
 - `engine/correlation` — extracted when Who Should I Ask needed Archaeology's ticket-correlation logic.
 - `engine/synthesis` — extracted when Weekly Digest needed Context Search's LLM-synthesis logic.
+- `engine/timeline` — extracted when Incident Correlation needed Archaeology's exact "blame → correlate" pipeline ([ADR 0026](docs/adr/0026-incident-correlation-and-timeline-extraction.md)); Archaeology's own test suite passed unmodified afterward.
 - **PR Blast Radius** shipped as a new `target_type` on an existing endpoint, not a 7th page ([ADR 0023](docs/adr/0023-pr-blast-radius-entry-point.md)) — the ranking pipeline needed zero changes, only how the file set gets resolved.
+- **Decision Debt** correlates decision docs using the same `engine/correlation` pipeline Slack/Jira correlation already had, via one added `source_types` filter ([ADR 0027](docs/adr/0027-decision-debt.md)) — not a new correlation mechanism.
 
-`connectors/*` is the only place that talks to GitHub/Slack/Jira's real APIs — everything else works against `ingested_items`, one normalized table every connector writes into the same shape. Retrieval is polymorphic across four query shapes — keyword, file/directory/PR, git history, time window — all resolving to "relevant items" through the same engine, not four parallel implementations.
+`connectors/*` is the only place that talks to GitHub/Slack/Jira's real APIs — everything else works against `ingested_items`, one normalized table every connector writes into the same shape. Retrieval is polymorphic across several query shapes — a keyword, a file/directory/PR, git history, a time window, a window around a point in time, a repo scoped by correlation — all resolving to "relevant items" through the same engine, not a parallel implementation per shape.
 
 ## Tech stack
 
@@ -134,7 +141,7 @@ flowchart TB
 ## Testing and correctness
 
 ```
-314 tests passing · 94.6% coverage on engine/ + features/ · CI gate at 85%
+350 tests passing · 95% coverage on engine/ + features/ · CI gate at 85%
 ```
 (A real, fresh run of the suite — not a stale figure.)
 
@@ -219,6 +226,8 @@ Login and data-access OAuth are deliberately separate app registrations per prov
 - **No frontend automated test suite** — CI runs ESLint and `tsc`/`next build` type-checking, not a test runner. Backend correctness is where the test investment went.
 - **A Drift/Stale-Ticket Finder and a Dependency Alert Bot were both scoped and explicitly not built** — reasoning for each cut is in [`docs/decisions/`](docs/decisions/), not just dropped silently.
 - **PR Blast Radius is reachable only through a search hit today** — no way to jump to an arbitrary PR by number if it hasn't already been indexed ([ADR 0023](docs/adr/0023-pr-blast-radius-entry-point.md)).
+- **Decision Debt only ever flags pull requests**, by choice — commits are consulted for author-activity signal but are never themselves a flaggable unit ([ADR 0027](docs/adr/0027-decision-debt.md)). A repo that commits directly to its default branch without PR review is invisible to this feature entirely.
+- **Decision-doc discovery uses a fixed folder allowlist** (`docs/adr`, `docs/decisions`, `adr`, `decisions`) — a repo with a different layout won't have its decision docs found; same tradeoff ticket-key extraction already makes.
 
 ## Documentation
 
