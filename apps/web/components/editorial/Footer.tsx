@@ -16,7 +16,7 @@ const PRODUCT = [
   { label: "Connections", href: "/connections" },
 ];
 const ELSEWHERE = [
-  { label: "GitHub", href: "https://github.com/kankaniakshat185/Relay", icon: "github" as const },
+  { label: "GitHub", href: "https://github.com/kankaniakshat185", icon: "github" as const },
   { label: "Portfolio", href: "https://akshatkankani.vercel.app", icon: "globe" as const },
 ];
 
