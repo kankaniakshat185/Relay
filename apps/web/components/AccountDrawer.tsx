@@ -72,7 +72,7 @@ function CloseIcon({ className }: { className?: string }) {
   );
 }
 
-/** Slides in from the left over a dimmed backdrop: account info up top,
+/** Slides in from the right over a dimmed backdrop: account info up top,
  * then one Vox-style divided list — every query mode, Connections, and
  * Sign out as large serif rows, each closed off by its own hairline
  * rule — instead of `DashboardNav`'s compact row. That nav stays exactly
@@ -131,8 +131,8 @@ export function AccountDrawer() {
       />
 
       <div
-        className={`bg-paper border-line fixed inset-y-0 left-0 z-50 w-[360px] border-r shadow-lg transition-transform duration-300 ease-out sm:w-[420px] ${
-          open ? "translate-x-0" : "-translate-x-full"
+        className={`bg-paper border-line fixed inset-y-0 right-0 z-50 w-[360px] border-l shadow-lg transition-transform duration-300 ease-out sm:w-[420px] ${
+          open ? "translate-x-0" : "translate-x-full"
         }`}
       >
         <div className="flex h-full flex-col overflow-y-auto px-8 py-8 sm:px-10 sm:py-10">
