@@ -1,25 +1,52 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
+import { AccountDrawer } from "./AccountDrawer";
 import { LogoMark } from "./editorial/LogoMark";
-import { NavMenu } from "./NavMenu";
 
-// Every actual nav item (query modes, Connections, theme, Sign out) now
-// lives inside `NavMenu`'s expanding panel — this header is just
-// branding plus the one trigger that opens it. The old approach (a
-// growing row of links, then a growing right-side cluster once
-// Connections/theme/name/Sign out got added there too) ran out of room
-// the moment a second new feature showed up; a single entry point with
-// unlimited room behind it doesn't.
+// The seven query modes stay directly in the header, as they always
+// were — the clutter complaint turned out to be specifically about the
+// account cluster (Connections/theme/name/Sign out) once Connections
+// joined it, not about this list. That cluster now lives behind
+// `AccountDrawer` instead; this row is untouched.
+const LIVE_ITEMS = [
+  { label: "Search", href: "/search" },
+  { label: "Archaeology", href: "/archaeology" },
+  { label: "Who to Ask", href: "/who-to-ask" },
+  { label: "Flaky Tests", href: "/flaky-tests" },
+  { label: "Notes", href: "/notes" },
+  { label: "Weekly Digest", href: "/weekly-digest" },
+  { label: "Incidents", href: "/incident-correlation" },
+] as const;
+
 export function DashboardNav() {
+  const pathname = usePathname();
+
   return (
-    <header className="border-line relative z-50 flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
-      <Link href="/" className="flex items-center gap-2">
-        <LogoMark className="nav-logo-mark h-7 w-7" />
-        <span className="font-serif text-ink text-3xl">Relay</span>
-      </Link>
-      <NavMenu />
+    <header className="border-line flex h-16 items-center justify-between border-b px-6 sm:h-18 sm:px-10">
+      <div className="flex items-center gap-8">
+        <Link href="/" className="flex items-center gap-2">
+          <LogoMark className="nav-logo-mark h-7 w-7" />
+          <span className="font-serif text-ink text-3xl">Relay</span>
+        </Link>
+        <nav className="hidden items-center gap-6 sm:flex">
+          {LIVE_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`text-xs font-medium tracking-[0.15em] uppercase transition-colors ${
+                pathname === item.href ? "text-brand" : "text-muted hover:text-ink"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <AccountDrawer />
     </header>
   );
 }
