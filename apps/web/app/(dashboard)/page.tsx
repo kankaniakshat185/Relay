@@ -62,6 +62,15 @@ const FEATURES = [
     href: "/weekly-digest",
     span: "md:col-span-5",
   },
+  {
+    n: "07",
+    title: "Incident Correlation",
+    description:
+      "Give Relay a time an incident was noticed — it surfaces everything across GitHub, Slack, Jira, and Notes around that window, and, if you name a file, that file's own commit history filtered to it.",
+    status: "live" as const,
+    href: "/incident-correlation",
+    span: "md:col-span-12",
+  },
 ];
 
 export default function DashboardHome() {

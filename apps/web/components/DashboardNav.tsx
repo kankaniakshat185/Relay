@@ -15,6 +15,7 @@ const LIVE_ITEMS = [
   { label: "Flaky Tests", href: "/flaky-tests" },
   { label: "Notes", href: "/notes" },
   { label: "Weekly Digest", href: "/weekly-digest" },
+  { label: "Incidents", href: "/incident-correlation" },
   { label: "Connections", href: "/connections" },
 ] as const;
 

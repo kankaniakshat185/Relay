@@ -81,20 +81,29 @@ async def get_items_needing_indexing(
 
 
 async def get_items_since(
-    db: AsyncSession, user_id: uuid.UUID, since: datetime, limit: int = 60
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    since: datetime,
+    limit: int = 60,
+    until: datetime | None = None,
 ) -> list[IngestedItem]:
-    """Every item across every source that occurred on or after `since`,
-    most recent first — a time-window read, not a similarity search. Used
-    by `features/weekly_digest` (see its ADR): a genuinely different
-    retrieval mode over the same table `engine.indexing.service.search`
-    ranks by relevance, capped the same pragmatic way (an active user's
-    digest covers their most recent `limit` items in the window, not
-    literally everything — same "heuristic, not ground truth" posture as
-    everywhere else in this codebase)."""
+    """Every item across every source that occurred on or after `since`
+    (and, if given, on or before `until`), most recent first — a
+    time-window read, not a similarity search. Used by
+    `features/weekly_digest` (open-ended: since N days ago, to now) and
+    `features/incident_correlation` (bounded both sides: a window around
+    a past timestamp, `until` is what makes that possible without a
+    second query function) — a genuinely different retrieval mode over
+    the same table `engine.indexing.service.search` ranks by relevance,
+    capped the same pragmatic way (an active user's window covers the
+    most recent `limit` items in it, not literally everything — same
+    "heuristic, not ground truth" posture as everywhere else in this
+    codebase)."""
+    filters = [IngestedItem.user_id == user_id, IngestedItem.occurred_at >= since]
+    if until is not None:
+        filters.append(IngestedItem.occurred_at <= until)
+
     result = await db.execute(
-        select(IngestedItem)
-        .where(IngestedItem.user_id == user_id, IngestedItem.occurred_at >= since)
-        .order_by(IngestedItem.occurred_at.desc())
-        .limit(limit)
+        select(IngestedItem).where(*filters).order_by(IngestedItem.occurred_at.desc()).limit(limit)
     )
     return list(result.scalars().all())

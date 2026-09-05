@@ -247,6 +247,30 @@ async def test_get_items_since_is_scoped_to_the_requesting_user(
     assert all(i.title != "Someone else's recent item" for i in results)
 
 
+async def test_get_items_since_with_until_bounds_both_sides_of_the_window(
+    db: AsyncSession, test_user: User
+) -> None:
+    before = _item(
+        "before-1", title="Before the window", occurred_at=datetime.now(UTC) - timedelta(days=10)
+    )
+    inside = _item(
+        "inside-1", title="Inside the window", occurred_at=datetime.now(UTC) - timedelta(days=5)
+    )
+    after = _item(
+        "after-1", title="After the window", occurred_at=datetime.now(UTC) - timedelta(days=1)
+    )
+    await ingestion_service.upsert_items(db, test_user.id, [before, inside, after])
+
+    results = await ingestion_service.get_items_since(
+        db,
+        test_user.id,
+        since=datetime.now(UTC) - timedelta(days=7),
+        until=datetime.now(UTC) - timedelta(days=2),
+    )
+
+    assert {i.title for i in results} == {"Inside the window"}
+
+
 async def test_get_items_since_respects_the_limit(db: AsyncSession, test_user: User) -> None:
     an_hour_ago = datetime.now(UTC) - timedelta(hours=1)
     items = [
