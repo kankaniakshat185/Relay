@@ -1,11 +1,14 @@
+
 <h1 align="center">Relay</h1>
+<img width="1470" height="741" alt="Screenshot 2026-09-23 at 2 56 47 PM" src="https://github.com/user-attachments/assets/0cbf70f0-4ba1-4802-a7f3-823c92c1a486" />
 
 
 A shared context engine that correlates GitHub, Slack, and Jira — eight purpose-built query interfaces on **one** retrieval/correlation engine, not eight disconnected integrations.
 
-> "Who should I ask about `payments/retry.py`?" → Relay ranks contributors by commit recency and frequency, credits a reviewer who commented but never committed a line, and surfaces the Slack thread and Jira ticket tied to the same file.
+>"Who should I ask about `payments/retry.py`?" → Relay ranks contributors by commit recency and frequency, credits a reviewer who commented but never committed a line, and surfaces the Slack thread and Jira ticket tied to the same file.
 
-**Live demo:** `https://therelay.vercel.app` — sign in with GitHub/Slack/Google.
+**Live demo:** https://therelay.vercel.app — sign in with GitHub/Slack/Google.
+
 
 ## Features
 
