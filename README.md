@@ -141,7 +141,7 @@ flowchart TB
 
 **Fix:** `broker_transport_options={"polling_interval": 30}` plus `--without-gossip --without-mingle --without-heartbeat`. Idle polling drops to ~2,880 requests/day; real task latency is unaffected at this scale. All three bugs now have regression tests, not just a one-off fix.
 
-## Testing and correctness
+## Testing 
 
 ```
 350 tests passing · 95% coverage on engine/ + features/ · CI gate at 85%
