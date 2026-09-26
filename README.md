@@ -108,7 +108,7 @@ flowchart TB
 
 ## Engineering decisions that mattered
 
-### Empirically calibrated correlation threshold
+### 1. Empirically calibrated correlation threshold
 
 **Problem:** deciding whether a Slack message or Jira ticket is genuinely *related* to a piece of code — not just superficially similar — needs a cutoff on the hybrid search score.
 
@@ -118,7 +118,7 @@ flowchart TB
 
 **Tradeoff:** derived from one observed dataset, not a formal precision/recall curve — a reasoned calibration, not a guarantee that holds at every scale.
 
-### Differential-tested ranking, not one "correct" answer
+### 2. Differential-tested ranking, not one "correct" answer
 
 [`engine/ranking`](apps/api/src/relay_api/engine/ranking/strategies.py) implements two scoring strategies over the same touch history — recency-weighted (half-life decay) and frequency-weighted (raw touch count) — expected to *disagree*, not converge:
 
@@ -126,11 +126,11 @@ flowchart TB
 
 [`tests/differential/test_ranking_strategies.py`](apps/api/tests/differential/test_ranking_strategies.py) asserts where the two strategies agree and documents, with this exact fixture, where and why they diverge. `features/who_to_ask` exposes both as a user-facing choice instead of collapsing them into one score — unlike `engine/indexing`'s search ranking, which does use a fixed 0.4/0.6 keyword/vector blend, because there both signals are meant to agree.
 
-### Safari's cookie policy needed an architecture fix, not a flag
+### 3. Safari's cookie policy needed an architecture fix, not a flag
 
 `SameSite=None; Secure` isn't enough once frontend and backend are on different domains — Safari's Intelligent Tracking Prevention blocks cross-site cookies on `fetch`/XHR regardless of that attribute. The fix ([ADR 0024](docs/adr/0024-bff-proxy-for-safari-cookie.md)) is a BFF proxy: `next.config.ts`'s `rewrites()` proxies every `/api/v1/*` call server-side, so every request — including the OAuth callback that mints the session cookie — stays same-site from the browser's perspective. This replaced the `SameSite=None` workaround entirely rather than sitting alongside it; there's no cookie attribute that fixes it once the request is genuinely cross-site.
 
-### Three bugs behind one Redis quota, found by reading a library's source
+### 4. Three bugs behind one Redis quota, found by reading a library's source
 
 **Symptom:** connecting GitHub/Slack intermittently returned a raw Internal Server Error — but refreshing showed the connection had actually succeeded. Every background sync job then started failing outright after moving from local Redis to Upstash (managed, TLS-only).
 
