@@ -241,4 +241,4 @@ Login and data-access OAuth are deliberately separate app registrations per prov
 
 ## License
 
-MIT
+MIT License. See `LICENSE` for more information.
