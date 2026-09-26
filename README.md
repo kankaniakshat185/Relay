@@ -23,7 +23,7 @@ A shared context engine that correlates GitHub, Slack, and Jira — eight purpos
 | **Incident Correlation** | Give it a timestamp and a window; it surfaces everything ingested around that time, plus — if you name a file — that file's own correlated commit history filtered to the same window. |
 | **Decision Debt** | Flags pull requests with real correlated Slack/Jira discussion but no correlated decision doc, and whether the PR's author still shows any recent activity at all. |
 
-## How it works
+## System Architecture
 
 Every feature is a thin router + service calling into one shared `engine/` — retrieval, correlation, ranking, and LLM synthesis all live in one place, never duplicated per feature. A `features/*` module may only import `engine/`, never a sibling feature; when two features need the same logic, that's the signal it belongs in the engine, not a reason to cross-import.
 
@@ -154,7 +154,7 @@ flowchart TB
 
 CI (`.github/workflows/ci.yml`) runs ruff, `ruff format --check`, `mypy --strict`, and the full suite against a real Postgres+Redis service, failing under 85% coverage on `engine/` + `features/`.
 
-## Build and run locally
+## Local Development Initialization
 
 **Prerequisites:** Node 22.13+, pnpm, Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker (for local Postgres/Redis).
 
