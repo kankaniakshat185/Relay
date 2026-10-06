@@ -206,7 +206,7 @@ apps/api/src/relay_api/
 ├── main.py               # app wiring only — CORS, router registration
 ├── auth/                 # login OAuth (GitHub · Slack · Google)
 ├── connectors/            # data-access OAuth + API clients (GitHub · Slack · Jira)
-├── engine/                # shared retrieval/correlation core (see How it works)
+├── engine/                # shared retrieval/correlation core (see Features)
 ├── features/              # one router + service per query mode
 └── jobs/                  # Celery app, periodic resync, indexing tasks
 apps/web/                  # Next.js (App Router) frontend
