@@ -1,5 +1,3 @@
-import ssl
-
 from celery import Celery
 from celery.schedules import crontab
 
@@ -10,6 +8,7 @@ from celery.schedules import crontab
 # imports `auth.models` (only `main.py`'s router chain does).
 from relay_api.core import model_registry  # noqa: F401
 from relay_api.core.config import get_settings
+from relay_api.core.redis_tls import tls_config_if_needed
 
 settings = get_settings()
 
@@ -47,28 +46,10 @@ celery_app.conf.update(
 )
 
 
-def tls_config_if_needed(redis_url: str) -> dict[str, int] | None:
-    """Upstash's managed Redis (used in production) issues `rediss://` URLs
-    (TLS) — Celery/kombu's redis transport refuses to even connect over
-    `rediss://` without an explicit `ssl_cert_reqs`, raising `ValueError: A
-    rediss:// URL must have parameter ssl_cert_reqs...` the first time
-    anything actually tries to publish or consume. Found live: every
-    `.delay()` call (the OAuth callback's post-connect indexing kickoff,
-    and the manual "Sync Now" endpoint) hit this and raised uncaught,
-    surfacing as a raw 500 — for the OAuth callback specifically, *after*
-    the connector credential had already been committed to the database,
-    which is why refreshing the page afterward showed it connected anyway.
-
-    `CERT_NONE`, not `CERT_REQUIRED`: this only authenticates the Redis
-    transport, which is already authenticated by the URL's own password;
-    verifying Upstash's cert chain would need extra CA bundle setup this
-    app doesn't otherwise need. Returns `None` for a plain `redis://` URL
-    (local dev, `docker run redis:7-alpine`) — no TLS config to add."""
-    if not redis_url.startswith("rediss://"):
-        return None
-    return {"ssl_cert_reqs": ssl.CERT_NONE}
-
-
+# `tls_config_if_needed` lives in `core/redis_tls.py` now — a second,
+# independent Redis client (`core/rate_limit.py`) needed the exact same
+# fix, and importing this module (which builds a real `Celery` app, with
+# side effects, on import) just to reuse one function would be backwards.
 _tls_config = tls_config_if_needed(settings.redis_url)
 if _tls_config is not None:
     celery_app.conf.broker_use_ssl = _tls_config

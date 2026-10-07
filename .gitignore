@@ -44,3 +44,5 @@ pnpm-debug.log*
 # --- Celery beat's local schedule store (runtime state, not source —
 # regenerated every time `celery beat` runs locally) ---
 celerybeat-schedule*
+
+relay-autodesk-architecture-plan.md
