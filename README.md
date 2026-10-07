@@ -23,7 +23,7 @@ A shared context engine that correlates GitHub, Slack, and Jira — eight purpos
 | **Incident Correlation** | Give it a timestamp and a window; it surfaces everything ingested around that time, plus — if you name a file — that file's own correlated commit history filtered to the same window. |
 | **Decision Debt** | Flags pull requests with real correlated Slack/Jira discussion but no correlated decision doc, and whether the PR's author still shows any recent activity at all. |
 
-## How it works
+## System Architecture
 
 Every feature is a thin router + service calling into one shared `engine/` — retrieval, correlation, ranking, and LLM synthesis all live in one place, never duplicated per feature. A `features/*` module may only import `engine/`, never a sibling feature; when two features need the same logic, that's the signal it belongs in the engine, not a reason to cross-import.
 
@@ -108,7 +108,7 @@ flowchart TB
 
 ## Engineering decisions that mattered
 
-### Empirically calibrated correlation threshold
+### 1. Empirically calibrated correlation threshold
 
 **Problem:** deciding whether a Slack message or Jira ticket is genuinely *related* to a piece of code — not just superficially similar — needs a cutoff on the hybrid search score.
 
@@ -118,7 +118,7 @@ flowchart TB
 
 **Tradeoff:** derived from one observed dataset, not a formal precision/recall curve — a reasoned calibration, not a guarantee that holds at every scale.
 
-### Differential-tested ranking, not one "correct" answer
+### 2. Differential-tested ranking, not one "correct" answer
 
 [`engine/ranking`](apps/api/src/relay_api/engine/ranking/strategies.py) implements two scoring strategies over the same touch history — recency-weighted (half-life decay) and frequency-weighted (raw touch count) — expected to *disagree*, not converge:
 
@@ -126,11 +126,11 @@ flowchart TB
 
 [`tests/differential/test_ranking_strategies.py`](apps/api/tests/differential/test_ranking_strategies.py) asserts where the two strategies agree and documents, with this exact fixture, where and why they diverge. `features/who_to_ask` exposes both as a user-facing choice instead of collapsing them into one score — unlike `engine/indexing`'s search ranking, which does use a fixed 0.4/0.6 keyword/vector blend, because there both signals are meant to agree.
 
-### Safari's cookie policy needed an architecture fix, not a flag
+### 3. Safari's cookie policy needed an architecture fix, not a flag
 
 `SameSite=None; Secure` isn't enough once frontend and backend are on different domains — Safari's Intelligent Tracking Prevention blocks cross-site cookies on `fetch`/XHR regardless of that attribute. The fix ([ADR 0024](docs/adr/0024-bff-proxy-for-safari-cookie.md)) is a BFF proxy: `next.config.ts`'s `rewrites()` proxies every `/api/v1/*` call server-side, so every request — including the OAuth callback that mints the session cookie — stays same-site from the browser's perspective. This replaced the `SameSite=None` workaround entirely rather than sitting alongside it; there's no cookie attribute that fixes it once the request is genuinely cross-site.
 
-### Three bugs behind one Redis quota, found by reading a library's source
+### 4. Three bugs behind one Redis quota, found by reading a library's source
 
 **Symptom:** connecting GitHub/Slack intermittently returned a raw Internal Server Error — but refreshing showed the connection had actually succeeded. Every background sync job then started failing outright after moving from local Redis to Upstash (managed, TLS-only).
 
@@ -141,7 +141,7 @@ flowchart TB
 
 **Fix:** `broker_transport_options={"polling_interval": 30}` plus `--without-gossip --without-mingle --without-heartbeat`. Idle polling drops to ~2,880 requests/day; real task latency is unaffected at this scale. All three bugs now have regression tests, not just a one-off fix.
 
-## Testing and correctness
+## Testing 
 
 ```
 350 tests passing · 95% coverage on engine/ + features/ · CI gate at 85%
@@ -154,7 +154,7 @@ flowchart TB
 
 CI (`.github/workflows/ci.yml`) runs ruff, `ruff format --check`, `mypy --strict`, and the full suite against a real Postgres+Redis service, failing under 85% coverage on `engine/` + `features/`.
 
-## Build and run locally
+## Local Development Initialization
 
 **Prerequisites:** Node 22.13+, pnpm, Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker (for local Postgres/Redis).
 
@@ -206,7 +206,7 @@ apps/api/src/relay_api/
 ├── main.py               # app wiring only — CORS, router registration
 ├── auth/                 # login OAuth (GitHub · Slack · Google)
 ├── connectors/            # data-access OAuth + API clients (GitHub · Slack · Jira)
-├── engine/                # shared retrieval/correlation core (see How it works)
+├── engine/                # shared retrieval/correlation core (see Features)
 ├── features/              # one router + service per query mode
 └── jobs/                  # Celery app, periodic resync, indexing tasks
 apps/web/                  # Next.js (App Router) frontend
@@ -241,4 +241,4 @@ Login and data-access OAuth are deliberately separate app registrations per prov
 
 ## License
 
-MIT
+MIT License. See `LICENSE` for more information.
