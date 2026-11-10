@@ -142,12 +142,12 @@ a {
  * see app/(dashboard)/template.tsx). Kept to a quick crossfade: no slide,
  * no blur — slower/directional motion reads as "cinematic," which fights
  * the sharp, print-like editorial tone above (§3 of the redesign brief). */
-::view-transition-group(.page-crossfade),
+/* ::view-transition-group(.page-crossfade),
 ::view-transition-old(.page-crossfade),
 ::view-transition-new(.page-crossfade) {
   animation-duration: 120ms;
   animation-timing-function: ease-out;
-}
+} */
 
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),
