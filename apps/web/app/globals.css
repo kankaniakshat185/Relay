@@ -145,7 +145,7 @@ a {
 ::view-transition-group(.page-crossfade),
 ::view-transition-old(.page-crossfade),
 ::view-transition-new(.page-crossfade) {
-  animation-duration: 120ms;
+  animation-duration: 300ms;
   animation-timing-function: ease-out;
 }
 
