@@ -137,3 +137,23 @@ a {
 :root[data-theme="dark"] .nav-logo-mark {
   filter: brightness(0) invert(1);
 }
+
+/* Page transitions (View Transitions API, via React's <ViewTransition> —
+ * see app/(dashboard)/template.tsx). Kept to a quick crossfade: no slide,
+ * no blur — slower/directional motion reads as "cinematic," which fights
+ * the sharp, print-like editorial tone above (§3 of the redesign brief). */
+::view-transition-group(.page-crossfade),
+::view-transition-old(.page-crossfade),
+::view-transition-new(.page-crossfade) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
